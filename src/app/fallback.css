@@ -1,0 +1,5 @@
+.route-fallback { display:grid; place-items:center; min-height:100svh; padding:1.5rem; }
+.route-fallback-panel { width:min(100%,37rem); padding:2.5rem; }
+.route-fallback-panel h1 { margin:0 0 1rem; font-size:2rem; }
+.route-fallback-panel p { margin:0 0 1.5rem; color:var(--muted,#a5adbd); }
+.route-fallback-actions { display:flex; gap:.75rem; flex-wrap:wrap; }
