@@ -119,7 +119,7 @@ function classifyProviderError(error: unknown, signal?: AbortSignal) {
     };
   }
   const data = typeof error === "object" && error !== null
-    ? error as { status?: number; name?: string; code?: string; headers?: Headers }
+    ? error as { status?: number; name?: string; code?: string; param?: string; headers?: Headers }
     : {};
   if (data.status === 429) {
     if (data.code === "insufficient_quota") {
@@ -147,7 +147,15 @@ function classifyProviderError(error: unknown, signal?: AbortSignal) {
   };
   const configMessage = data.status === undefined ? undefined : configFailures[data.status];
   if (configMessage) {
-    return { error: new ResearchError("CONFIG", configMessage), retry: false, uncertain: false };
+    const safeCodes = ["model_not_found", "unsupported_parameter", "unsupported_value", "invalid_value", "invalid_request_error"];
+    const safeParameters = ["model", "tools", "tools[0].type", "tools[0].filters", "tools[0].search_context_size",
+      "tool_choice", "max_tool_calls", "max_output_tokens", "text.format", "text.format.schema", "include"];
+    const details = [
+      data.code && safeCodes.includes(data.code) ? data.code : undefined,
+      data.param && safeParameters.includes(data.param) ? data.param : undefined,
+    ].filter(Boolean);
+    const diagnostic = data.status === 400 && details.length ? " (" + details.join(" · ") + ")" : "";
+    return { error: new ResearchError("CONFIG", configMessage + diagnostic), retry: false, uncertain: false };
   }
   const serverError = data.status !== undefined && data.status >= 500;
   return {

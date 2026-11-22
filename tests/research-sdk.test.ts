@@ -131,7 +131,7 @@ it("tests the connection with one hosted tool call and tracks its cost", async (
       output:[{type:"web_search_call",status:"completed",id:"ws_test",action:{type:"search"}},
         message("final_answer",[text('{"title":"OpenAI API documentation"}')])],
     }))
-    .mockResolvedValueOnce(json({error:{message:"Unavailable"}},503));
+    .mockResolvedValueOnce(json({error:{message:"Private provider payload",code:"unsupported_parameter",param:"tool_choice"}},400));
   vi.stubGlobal("fetch",transport);
   try {
     const allowRequest = vi.fn().mockResolvedValue(true);
@@ -140,7 +140,10 @@ it("tests the connection with one hosted tool call and tracks its cost", async (
     expect(transport).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(String(transport.mock.calls[0][1]?.body));
     expect(payload).toMatchObject({store:false,max_tool_calls:1,tools:[{type:"web_search"}]});
-    expect(await testOpenAIConnection({allowRequest,recordUsage})).toMatchObject({ok:false,estimatedCost:null});
+    const rejected = await testOpenAIConnection({allowRequest,recordUsage});
+    expect(rejected).toMatchObject({ok:false,estimatedCost:null});
+    expect(rejected.message).toContain("unsupported_parameter · tool_choice");
+    expect(rejected.message).not.toContain("Private provider payload");
     expect(transport).toHaveBeenCalledTimes(2);
   } finally {
     vi.unstubAllGlobals();
