@@ -164,9 +164,9 @@ describe("web research", () => {
     expect(record).toHaveBeenCalledWith(expect.objectContaining({ searchUsage: 1, estimatedCost: 0.01015 }));
   });
 
-  it.each(["{", { ticker: "NVDA" }])("rejects bad JSON or incomplete output with recorded usage", async (bad) => {
+  it.each(["{", { ticker: "NVDA" }])("rejects invalid output and records usage when only one request is available", async (bad) => {
     createResponse.mockResolvedValueOnce(response(bad));
-    const result = await researchAsset(scan);
+    const result = await researchAsset({ ...scan, maxRequests: 1 });
     expect(result).toMatchObject({ status: "failed", candidate: null, requestCount: 1, estimatedCost: 0.01015 });
   });
 

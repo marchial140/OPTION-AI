@@ -52,6 +52,8 @@ The server uses the official JavaScript SDK and a configured model. Research req
 
 External pages are research inputs. The request instructions tell the model to ignore commands in those inputs. The tool surface is limited to search during research and the model never receives database or shell access. See [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) and [web search](https://platform.openai.com/docs/guides/tools-web-search).
 
+When a completed Web response has recognized sources but unreadable JSON, the server can make one structured reformatting request without Web search. It counts against the same request, cost, and timeout limits, and can add model token charges. Evidence is still checked against the original Web response.
+
 ### Configuration and estimated costs
 
 Set `OPENAI_MODEL` to a model with web search and structured output enabled for the project. Configure `AI_INPUT_USD_PER_MILLION`, `AI_OUTPUT_USD_PER_MILLION`, and `AI_SEARCH_USD_PER_CALL` for the configured model and tool. A separate `OPENAI_DEEP_MODEL` requires `AI_DEEP_INPUT_USD_PER_MILLION` and `AI_DEEP_OUTPUT_USD_PER_MILLION`. Use rates applicable to your account and model. See [OpenAI API pricing](https://openai.com/api/pricing/).

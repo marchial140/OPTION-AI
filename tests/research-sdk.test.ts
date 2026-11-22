@@ -34,6 +34,7 @@ describe("official SDK request and response contract", () => {
     vi.stubEnv("AI_OUTPUT_USD_PER_MILLION", "2");
     vi.stubEnv("AI_SEARCH_USD_PER_CALL", "0.01");
     vi.stubEnv("AI_MAX_RETRIES", "0");
+    vi.stubEnv("AI_MAX_CALLS_PER_TICKER", "3");
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -107,6 +108,86 @@ describe("official SDK request and response contract", () => {
     } else {
       expect(result.error).toContain(field ?? "réponse illisible");
     }
+  });
+
+  function unreadableResearch(url = secUrl) {
+    const answer = JSON.stringify(analysis).slice(0, -1) + ",}";
+    return json({
+      id: "resp_unreadable", status: "completed",
+      usage: { input_tokens: 100, output_tokens: 30 },
+      output: [
+        { type: "web_search_call", status: "completed", id: "ws_unreadable", action: { type: "search" } },
+        message("final_answer", [text(answer, [{
+          type: "url_citation", url, title: "Source originale", start_index: 0, end_index: 10,
+        }])]),
+      ],
+    });
+  }
+
+  it("repairs malformed research once without search and keeps only original citations", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(unreadableResearch())
+      .mockResolvedValueOnce(json({
+        id: "resp_repair", status: "completed",
+        usage: { input_tokens: 200, output_tokens: 60 },
+        output: [message("final_answer", [text(JSON.stringify({
+          ...analysis,
+          news: [{ ...analysis.thesis, source: { url: issuerUrl } }],
+        }), [{ type: "url_citation", url: issuerUrl, title: "Added during repair" }])])],
+      }));
+    vi.stubGlobal("fetch", fetch);
+    const allowRequest = vi.fn(async () => true);
+    const recordUsage = vi.fn(async () => {});
+
+    const result = await researchAsset({
+      symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 2, allowRequest, recordUsage,
+    });
+
+    expect(result).toMatchObject({ status: "completed", requestCount: 2, estimatedCost: 0.01048, opportunities: [] });
+    expect(result.candidate?.sources).toEqual([expect.objectContaining({ url: secUrl, citation: "Source originale" })]);
+    expect(result.candidate?.evidence?.map(({ kind }) => kind)).toEqual(["thesis", "bullish"]);
+    expect(allowRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({ requestType: "screen", estimatedSearches: 0 }));
+    expect(recordUsage).toHaveBeenNthCalledWith(2, expect.objectContaining({ searchUsage: 0, estimatedCost: 0.00032 }));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const body = JSON.parse(String(fetch.mock.calls[1][1]?.body));
+    expect(body).toMatchObject({
+      model: "configured-test-model", store: false,
+      text: { format: { type: "json_schema", strict: true } },
+    });
+    expect(body).not.toHaveProperty("tools");
+    expect(body).not.toHaveProperty("max_tool_calls");
+    expect(body.text.format.schema.properties.bullishFactors).not.toHaveProperty("default");
+    expect(JSON.parse(body.input)).toMatchObject({ sourceUrls: [secUrl], answer: expect.stringContaining('"ticker":"NVDA"') });
+  });
+
+  it.each([
+    { label: "the request cap has been reached", maxRequests: 1, url: secUrl, budgetAllowsRepair: true },
+    { label: "the budget denies the follow-up", maxRequests: 2, url: secUrl, budgetAllowsRepair: false },
+    { label: "the Web response lacks a recognized source", maxRequests: 2, url: "https://example.com/nvda", budgetAllowsRepair: true },
+  ])("makes no second request when $label", async ({ maxRequests, url, budgetAllowsRepair }) => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(unreadableResearch(url));
+    vi.stubGlobal("fetch", fetch);
+    const allowRequest = vi.fn(async () => budgetAllowsRepair).mockResolvedValueOnce(true);
+
+    const result = await researchAsset({
+      symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests, allowRequest,
+    });
+
+    expect(result).toMatchObject({ status: "failed", requestCount: 1, estimatedCost: 0.01016 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry a failed repair even when transient retries are enabled", async () => {
+    vi.stubEnv("AI_MAX_RETRIES", "2");
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(unreadableResearch())
+      .mockResolvedValueOnce(json({ error: { message: "temporarily unavailable" } }, 503));
+    vi.stubGlobal("fetch", fetch);
+
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 3 });
+
+    expect(result).toMatchObject({ status: "failed", requestCount: 2 });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("keeps recorded usage for provider refusals and returns a bounded error", async () => {
