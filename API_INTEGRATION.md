@@ -48,7 +48,7 @@ A scan request can supply symbols directly or select a saved watchlist. Supply a
 
 ## Responses API
 
-The server uses the official JavaScript SDK and a configured model. Research requests combine built-in `web_search`, a bounded tool-call budget, and a JSON schema in the instructions. Responses pass strict runtime validation before the application can save them. The evidence parser accepts sources whose HTTPS URLs and source category are corroborated by tool output. Financial quote assertions require evidence independent of model text.
+The server uses the official JavaScript SDK and a configured model. Research requests combine built-in `web_search`, a bounded tool-call budget, and a JSON schema in the instructions. Responses pass strict runtime validation before the application can save them. The evidence parser accepts sources whose HTTPS URLs and source category are corroborated by OpenAI search output or citation annotations. Financial quote assertions require evidence independent of model text.
 
 External pages are research inputs. The request instructions tell the model to ignore commands in those inputs. The tool surface is limited to search during research and the model never receives database or shell access. See [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) and [web search](https://platform.openai.com/docs/guides/tools-web-search).
 

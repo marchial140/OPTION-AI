@@ -46,7 +46,7 @@ describe("official SDK request and response contract", () => {
       usage: { input_tokens: 100, output_tokens: 30 },
       output: [
         { type: "web_search_call", status: "completed", id: "ws_wire", action: {
-          type: "search", queries: ["NVDA official filing"], sources: [{ type: "url", url: secUrl }],
+          type: "search", queries: ["NVDA official filing"],
         } },
         message("commentary", [text("Vérification des références en cours.", [{
           type: "url_citation", url: issuerUrl, title: "Page de l’émetteur", start_index: 0, end_index: 10,
@@ -70,16 +70,17 @@ describe("official SDK request and response contract", () => {
     expect(String(url)).toBe("https://api.openai.com/v1/responses");
     expect(options?.method).toBe("POST");
     expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer local-test-secret");
-    expect(JSON.parse(String(options?.body))).toMatchObject({
+    const body = JSON.parse(String(options?.body));
+    expect(body).toMatchObject({
       model: "configured-test-model",
       store: false,
       tool_choice: "required",
       max_tool_calls: 2,
-      tools: [{ type: "web_search", filters: { allowed_domains: expect.arrayContaining(["sec.gov"]) } }],
-      include: ["web_search_call.action.sources"],
       instructions: expect.stringContaining('"underlyingQuote"'),
     });
-    expect(JSON.parse(String(options?.body))).not.toHaveProperty("text");
+    expect(body.tools).toEqual([{ type: "web_search" }]);
+    expect(body).not.toHaveProperty("include");
+    expect(body).not.toHaveProperty("text");
   });
 
   it("keeps recorded usage for provider refusals and returns a bounded error", async () => {

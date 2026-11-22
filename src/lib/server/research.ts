@@ -128,7 +128,7 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
     const { data, response } = await openAIRequest({
       type: "screen", instructions: screenInstructions, schema: screenSchema, schemaName: "underlying_research",
       input: JSON.stringify({ symbol, asOf: context.now.toISOString(), depth: deep ? "approfondie" : "rapide", prioritizeDomains: trustedResearchDomains }),
-      deep, web: true, webDomains: trustedResearchDomains, maxOutputTokens: deep ? 2800 : 1800, maxRequests: context.maxRequests,
+      deep, web: true, maxOutputTokens: deep ? 2800 : 1800, maxRequests: context.maxRequests,
       signal: context.signal, hooks: context.hooks, usages: context.usages,
     });
     if (data.ticker.toUpperCase() !== symbol) throw new ResearchError("SCHEMA", "Le symbole retourné ne correspond pas au symbole demandé.");
@@ -203,9 +203,9 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
       type: "contract", instructions: discoverInstructions, schema: discoverySchema, schemaName: "option_discovery",
       input: JSON.stringify({
         symbol, asOf: context.now.toISOString(), minDte: preferences.minDte ?? defaultRiskPreferences.minDte,
-        maxDte: preferences.maxDte ?? defaultRiskPreferences.maxDte,
+        maxDte: preferences.maxDte ?? defaultRiskPreferences.maxDte, prioritizeDomains: trustedResearchDomains,
       }),
-      deep: context.mode === "deep", web: true, webDomains: trustedResearchDomains, maxOutputTokens: 2200, maxRequests: context.maxRequests,
+      deep: context.mode === "deep", web: true, maxOutputTokens: 2200, maxRequests: context.maxRequests,
       signal: context.signal, hooks: context.hooks, usages: context.usages,
     });
     if (data.ticker.toUpperCase() !== symbol) throw new ResearchError("SCHEMA", "Le symbole retourné par la recherche d’options est incorrect.");

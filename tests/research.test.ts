@@ -85,11 +85,7 @@ describe("web research", () => {
     expect(recordUsage).toHaveBeenCalledWith(expect.objectContaining({ inputTokens: 100, outputTokens: 50, searchUsage: 1, estimatedCost: 0.01015 }));
     expect(createResponse).toHaveBeenCalledWith(expect.objectContaining({
       model: "test-model", store: false, tool_choice: "required",
-      tools: [expect.objectContaining({
-        type: "web_search", search_context_size: "low",
-        filters: { allowed_domains: expect.arrayContaining(["sec.gov", "cboe.com"]) },
-      })],
-      include: ["web_search_call.action.sources"],
+      tools: [{ type: "web_search" }],
       instructions: expect.stringContaining("Return only a JSON object"),
     }), expect.any(Object));
   });

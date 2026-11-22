@@ -208,7 +208,6 @@ interface RequestInput<Schema extends ZodType> {
   schemaName: string;
   deep?: boolean;
   web: boolean;
-  webDomains?: string[];
   maxOutputTokens: number;
   maxRequests: number;
   maxWebCalls?: number;
@@ -240,7 +239,7 @@ export async function openAIRequest<Schema extends ZodType>(
   const instructions = input.web && !input.minimalWebProbe
     ? input.instructions + "\nReturn only a JSON object matching this schema, without Markdown: " + JSON.stringify(format?.schema)
     : input.instructions;
-  // Search context size is advisory. Reserve conservatively and reconcile with actual usage.
+  // Reserve conservatively for search context and reconcile with actual usage.
   const estimatedWebContextTokens = input.web ? (input.deep ? 20_000 : 10_000) : 0;
   const reservedTokens = Buffer.byteLength(instructions + input.input, "utf8") +
     estimatedWebContextTokens * maxToolCalls + 2_000;
@@ -271,15 +270,8 @@ export async function openAIRequest<Schema extends ZodType>(
         max_output_tokens: input.maxOutputTokens,
         ...(!input.web && format ? { text: { format } } : {}),
         ...(input.web ? {
-          tools: [{
-            type: "web_search",
-            ...(!input.minimalWebProbe ? {
-              search_context_size: input.deep ? "medium" as const : "low" as const,
-              ...(input.webDomains?.length ? { filters: { allowed_domains: input.webDomains } } : {}),
-            } : {}),
-          }],
+          tools: [{ type: "web_search" }],
           tool_choice: "required" as const,
-          ...(!input.minimalWebProbe ? { include: ["web_search_call.action.sources"] as ["web_search_call.action.sources"] } : {}),
           max_tool_calls: maxToolCalls,
         } : {}),
       }, { signal: input.signal });
