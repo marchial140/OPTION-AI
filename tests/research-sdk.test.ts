@@ -126,7 +126,7 @@ it("tests the connection with one hosted tool call and tracks its cost", async (
     .mockResolvedValueOnce(json({
       id:"resp_test",object:"response",status:"completed",usage:{input_tokens:100,output_tokens:20},
       output:[{type:"web_search_call",status:"completed",id:"ws_test",action:{type:"search"}},
-        message("final_answer",[text('{"title":"OpenAI API documentation"}')])],
+        message("final_answer",[text("OpenAI API documentation")])],
     }))
     .mockResolvedValueOnce(json({error:{message:"Private provider payload",code:"unsupported_parameter",param:"tool_choice"}},400));
   vi.stubGlobal("fetch",transport);
@@ -136,7 +136,10 @@ it("tests the connection with one hosted tool call and tracks its cost", async (
     expect(await testOpenAIConnection({allowRequest,recordUsage})).toMatchObject({ok:true,estimatedCost:0.01014});
     expect(transport).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(String(transport.mock.calls[0][1]?.body));
-    expect(payload).toMatchObject({store:false,max_tool_calls:1,tools:[{type:"web_search"}]});
+    expect(payload).toEqual({
+      model:"test-model", input:"Find the title of the official OpenAI API documentation.",
+      store:false,max_tool_calls:1,max_output_tokens:256,tool_choice:"required",tools:[{type:"web_search"}],
+    });
     const rejected = await testOpenAIConnection({allowRequest,recordUsage});
     expect(rejected).toMatchObject({ok:false,estimatedCost:null});
     expect(rejected.message).toContain("unsupported_parameter · tool_choice");

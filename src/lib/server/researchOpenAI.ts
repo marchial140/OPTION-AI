@@ -212,6 +212,7 @@ interface RequestInput<Schema extends ZodType> {
   maxOutputTokens: number;
   maxRequests: number;
   maxWebCalls?: number;
+  minimalWebProbe?: boolean;
   hooks?: BudgetHooks;
   signal?: AbortSignal;
   usages: ResearchUsage[];
@@ -234,10 +235,10 @@ export async function openAIRequest<Schema extends ZodType>(
   });
   const retryMax = envInteger("AI_MAX_RETRIES", 1, 0, 2);
   const maxToolCalls = input.web ? (input.maxWebCalls ?? (input.deep ? 4 : 2)) : 0;
-  const format = zodTextFormat(input.schema, input.schemaName);
+  const format = input.minimalWebProbe ? undefined : zodTextFormat(input.schema, input.schemaName);
   // Some models reject hosted search combined with a strict response format.
-  const instructions = input.web
-    ? input.instructions + "\nReturn only a JSON object matching this schema, without Markdown: " + JSON.stringify(format.schema)
+  const instructions = input.web && !input.minimalWebProbe
+    ? input.instructions + "\nReturn only a JSON object matching this schema, without Markdown: " + JSON.stringify(format?.schema)
     : input.instructions;
   // Search context size is advisory. Reserve conservatively and reconcile with actual usage.
   const estimatedWebContextTokens = input.web ? (input.deep ? 20_000 : 10_000) : 0;
@@ -264,19 +265,21 @@ export async function openAIRequest<Schema extends ZodType>(
     try {
       response = await client.responses.create({
         model: model.name,
-        instructions,
+        ...(input.minimalWebProbe ? {} : { instructions }),
         input: input.input,
         store: false,
         max_output_tokens: input.maxOutputTokens,
-        ...(!input.web ? { text: { format } } : {}),
+        ...(!input.web && format ? { text: { format } } : {}),
         ...(input.web ? {
           tools: [{
             type: "web_search",
-            search_context_size: input.deep ? "medium" : "low",
-            ...(input.webDomains?.length ? { filters: { allowed_domains: input.webDomains } } : {}),
+            ...(!input.minimalWebProbe ? {
+              search_context_size: input.deep ? "medium" as const : "low" as const,
+              ...(input.webDomains?.length ? { filters: { allowed_domains: input.webDomains } } : {}),
+            } : {}),
           }],
           tool_choice: "required" as const,
-          include: ["web_search_call.action.sources"],
+          ...(!input.minimalWebProbe ? { include: ["web_search_call.action.sources"] as ["web_search_call.action.sources"] } : {}),
           max_tool_calls: maxToolCalls,
         } : {}),
       }, { signal: input.signal });
@@ -323,6 +326,8 @@ export async function openAIRequest<Schema extends ZodType>(
     throw new ResearchError("NO_SOURCES", "La recherche Web n’a retourné aucune source exploitable.");
   }
 
+  if (input.minimalWebProbe) return { data: input.schema.parse(text), response };
+
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -337,13 +342,12 @@ export async function openAIRequest<Schema extends ZodType>(
 
 export async function testOpenAIConnection(hooks: BudgetHooks, signal?: AbortSignal) {
   const usages: ResearchUsage[] = [];
-  const schema = z.object({title:z.string()});
+  const schema = z.string().trim().min(1);
   let error: ResearchError | undefined;
   try {
     await openAIRequest({
-      type:"screen", instructions:"Search the official OpenAI website and return the title of its API documentation page.",
-      input:"Find the OpenAI API documentation.", schema, schemaName:"connection_test",
-      web:true, webDomains:["developers.openai.com","platform.openai.com"],
+      type:"screen", instructions:"", input:"Find the title of the official OpenAI API documentation.",
+      schema, schemaName:"connection_test", web:true, minimalWebProbe:true,
       maxWebCalls:1, maxOutputTokens:256, maxRequests:1, usages, hooks, signal,
     });
   } catch (failure) {
