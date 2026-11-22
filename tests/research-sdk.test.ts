@@ -84,16 +84,19 @@ describe("official SDK request and response contract", () => {
   });
 
   it.each([
-    { label: "omitted unavailable fields", payload: { ticker: "NVDA", companyName: "NVIDIA", direction: "bullish", thesis: analysis.thesis }, expected: "completed" },
-    { label: "invalid quote types", payload: { ...analysis, underlyingQuote: { price: "123", currency: "USD", source } }, expected: "failed" },
-  ])("handles fenced research JSON with $label", async ({ payload, expected }) => {
+    { label: "fenced JSON between prose and a citation", format: (body: string) => "Analyse NVDA\n\n```json\n" + body + "\n```\n\nSource : SEC", expected: "completed" },
+    { label: "bare JSON between prose and a citation", format: (body: string) => "Analyse NVDA\n" + body + "\nSource : SEC", expected: "completed" },
+    { label: "ambiguous JSON", format: (body: string) => body + "\n" + body, expected: "failed" },
+    { label: "invalid quote types", format: () => JSON.stringify({ ...analysis, underlyingQuote: { price: "123", currency: "USD", source } }), expected: "failed", field: "underlyingQuote" },
+  ])("validates $label", async ({ format, expected, field }) => {
+    const payload = { ticker: "NVDA", companyName: "NVIDIA", direction: "bullish", thesis: analysis.thesis };
     const citation = { type: "url_citation", url: secUrl, title: "SEC", start_index: 0, end_index: 10 };
     vi.stubGlobal("fetch", vi.fn<typeof globalThis.fetch>().mockResolvedValue(json({
       id: "resp_fenced", object: "response", status: "completed",
       usage: { input_tokens: 100, output_tokens: 30 },
       output: [
         { type: "web_search_call", status: "completed", id: "ws_fenced", action: { type: "search" } },
-        message("final_answer", [text("```json\n" + JSON.stringify(payload) + "\n```", [citation])]),
+        message("final_answer", [text(format(JSON.stringify(payload)), [citation])]),
       ],
     })));
     const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live" });
@@ -102,7 +105,7 @@ describe("official SDK request and response contract", () => {
     if (expected === "completed") {
       expect(result.candidate).toMatchObject({ price: null, sources: [expect.objectContaining({ url: secUrl })] });
     } else {
-      expect(result.error).toContain("underlyingQuote");
+      expect(result.error).toContain(field ?? "réponse illisible");
     }
   });
 

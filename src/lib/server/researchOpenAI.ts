@@ -200,6 +200,32 @@ function completedText(response: Response) {
   return text;
 }
 
+function parseWebResearchJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Hosted search can surround the JSON with prose or citation markers.
+    const fenced = [...text.matchAll(/^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gim)];
+    if (fenced.length === 1) return JSON.parse(fenced[0][1]);
+    if (fenced.length > 1) throw new SyntaxError("Multiple fenced responses");
+
+    let start = 0;
+    let depth = 0;
+    const objects: string[] = [];
+    for (const token of text.matchAll(/"(?:[^"\\]|\\[\s\S])*"|[{}]/g)) {
+      if (token[0] === "{") {
+        if (depth === 0) start = token.index;
+        depth += 1;
+      } else if (token[0] === "}" && depth > 0) {
+        depth -= 1;
+        if (depth === 0) objects.push(text.slice(start, token.index + 1));
+      }
+    }
+    if (objects.length !== 1 || depth !== 0) throw new SyntaxError("Expected one complete JSON object");
+    return JSON.parse(objects[0]);
+  }
+}
+
 interface RequestInput<Schema extends ZodType> {
   type: ResearchRequestType;
   instructions: string;
@@ -322,8 +348,7 @@ export async function openAIRequest<Schema extends ZodType>(
 
   let json: unknown;
   try {
-    const fenced = input.web ? /^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i.exec(text.trim()) : null;
-    json = JSON.parse(fenced?.[1] ?? text);
+    json = input.web ? parseWebResearchJson(text) : JSON.parse(text);
   } catch {
     throw new ResearchError("SCHEMA", "OpenAI a retourné une réponse illisible.");
   }
