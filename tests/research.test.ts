@@ -90,6 +90,28 @@ describe("web research", () => {
     }), expect.any(Object));
   });
 
+  it.each([
+    { label: "a null date", earnings: { date: null, source: { url: secUrl } }, reported: false },
+    { label: "an invalid calendar date", earnings: { date: "2026-11-31", source: { url: secUrl } }, reported: false },
+    { label: "a missing source", earnings: { date: "2027-01-20" }, reported: false },
+    { label: "an uncited source", earnings: { date: "2027-01-20", source: { url: "https://www.sec.gov/uncited.htm" } }, reported: false },
+    { label: "a cited date", earnings: { date: "2027-01-20", source: { url: secUrl } }, reported: true },
+  ])("preserves a sourced scan with $label in the earnings field", async ({ earnings, reported }) => {
+    createResponse.mockResolvedValueOnce(response({ ...defaultScreen, earnings }));
+
+    const result = await researchAsset(scan);
+
+    expect(result).toMatchObject({
+      status: "completed", requestCount: 1, opportunities: [],
+      candidate: { direction: "bullish", price: null },
+    });
+    const evidence = result.candidate?.evidence?.filter(({ kind }) => kind === "earnings");
+    expect(evidence).toEqual(reported ? [
+      expect.objectContaining({ status: "UNVERIFIED", source: expect.objectContaining({ url: secUrl }) }),
+    ] : []);
+    expect(JSON.stringify(result)).not.toContain(earnings.date ?? "Date inconnue");
+  });
+
   it("discovers contracts in a second bounded step without constructing a web-only trade", async () => {
     createResponse.mockResolvedValueOnce(response(defaultScreen)).mockResolvedValueOnce(response({
       ticker: "NVDA",

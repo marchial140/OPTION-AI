@@ -85,7 +85,8 @@ export const screenSchema = z.object({
   volatilityContext: claimSchema.nullable().default(null),
   news: z.array(claimSchema).default([]),
   uncertainty: z.array(z.string()).default([]),
-  earnings: z.object({ date: z.string(), source: sourceReferenceSchema }).nullable().default(null),
+  // An unusable event report must not discard independently sourced research.
+  earnings: z.object({ date: z.iso.date(), source: sourceReferenceSchema }).nullable().default(null).catch(null),
   underlyingQuote: z.object({
     price: z.number(),
     currency: z.string(),

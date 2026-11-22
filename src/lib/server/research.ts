@@ -35,7 +35,7 @@ const screenInstructions = [
   "Relève des éléments récents de contexte, annonces, nouvelles, risques sectoriels/macroéconomiques et facteurs contradictoires du ticker demandé.",
   "Préfère rapports et communiqués des émetteurs, bourses et sources financières de référence.",
   "Écris les éléments qualitatifs sans chiffres de cours, rendement, volume, intérêt ouvert ou volatilité, avec une source propre à chaque élément.",
-  "Indique les conditions qui fragilisent la thèse. Signale les échéances de résultats uniquement lorsque leur source est disponible.",
+  "Indique les conditions qui fragilisent la thèse. Pour earnings, fournis une date AAAA-MM-JJ et sa source, ou null si l’une manque.",
   "Si un cours exact et horodaté est publié, isole-le dans underlyingQuote. Ne déduis ni la date de cotation ni un indicateur absent.",
 ].join(" ");
 
