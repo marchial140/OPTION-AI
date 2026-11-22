@@ -90,7 +90,7 @@ describe("web research", () => {
         filters: { allowed_domains: expect.arrayContaining(["sec.gov", "cboe.com"]) },
       })],
       include: ["web_search_call.action.sources"],
-      text: expect.objectContaining({ format: expect.objectContaining({ strict: true, type: "json_schema" }) }),
+      instructions: expect.stringContaining("Return only a JSON object"),
     }), expect.any(Object));
   });
 

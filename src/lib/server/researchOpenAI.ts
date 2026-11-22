@@ -234,9 +234,14 @@ export async function openAIRequest<Schema extends ZodType>(
   });
   const retryMax = envInteger("AI_MAX_RETRIES", 1, 0, 2);
   const maxToolCalls = input.web ? (input.maxWebCalls ?? (input.deep ? 4 : 2)) : 0;
+  const format = zodTextFormat(input.schema, input.schemaName);
+  // Some models reject hosted search combined with a strict response format.
+  const instructions = input.web
+    ? input.instructions + "\nReturn only a JSON object matching this schema, without Markdown: " + JSON.stringify(format.schema)
+    : input.instructions;
   // Search context size is advisory. Reserve conservatively and reconcile with actual usage.
   const estimatedWebContextTokens = input.web ? (input.deep ? 20_000 : 10_000) : 0;
-  const reservedTokens = Buffer.byteLength(input.instructions + input.input, "utf8") +
+  const reservedTokens = Buffer.byteLength(instructions + input.input, "utf8") +
     estimatedWebContextTokens * maxToolCalls + 2_000;
   const reservation = {
     model: model.name,
@@ -244,7 +249,6 @@ export async function openAIRequest<Schema extends ZodType>(
     estimatedCost: computeCost(pricing, reservedTokens, input.maxOutputTokens, maxToolCalls),
     estimatedSearches: maxToolCalls,
   };
-  const format = zodTextFormat(input.schema, input.schemaName);
   let response: Response | undefined;
 
   for (let retry = 0; retry <= retryMax; retry += 1) {
@@ -260,11 +264,11 @@ export async function openAIRequest<Schema extends ZodType>(
     try {
       response = await client.responses.create({
         model: model.name,
-        instructions: input.instructions,
+        instructions,
         input: input.input,
         store: false,
         max_output_tokens: input.maxOutputTokens,
-        text: { format },
+        ...(!input.web ? { text: { format } } : {}),
         ...(input.web ? {
           tools: [{
             type: "web_search",

@@ -40,7 +40,7 @@ describe("official SDK request and response contract", () => {
     vi.unstubAllEnvs();
   });
 
-  it("serializes strict Responses parameters and reads final JSON separately from commentary", async () => {
+  it("serializes search-compatible Responses parameters and reads final JSON separately from commentary", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(json({
       id: "resp_wire_test", object: "response", status: "completed",
       usage: { input_tokens: 100, output_tokens: 30 },
@@ -77,12 +77,9 @@ describe("official SDK request and response contract", () => {
       max_tool_calls: 2,
       tools: [{ type: "web_search", filters: { allowed_domains: expect.arrayContaining(["sec.gov"]) } }],
       include: ["web_search_call.action.sources"],
-      text: { format: {
-        type: "json_schema", strict: true, name: "underlying_research", schema: {
-          type: "object", additionalProperties: false, required: expect.arrayContaining(["ticker", "underlyingQuote", "thesis"]),
-        },
-      } },
+      instructions: expect.stringContaining('"underlyingQuote"'),
     });
+    expect(JSON.parse(String(options?.body))).not.toHaveProperty("text");
   });
 
   it("keeps recorded usage for provider refusals and returns a bounded error", async () => {
