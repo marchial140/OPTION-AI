@@ -86,7 +86,7 @@ describe("web research", () => {
     expect(createResponse).toHaveBeenCalledWith(expect.objectContaining({
       model: "test-model", store: false, tool_choice: "required",
       tools: [{ type: "web_search" }],
-      instructions: expect.stringContaining("Return only a JSON object"),
+      instructions: expect.stringContaining("Return only one JSON object"),
     }), expect.any(Object));
   });
 

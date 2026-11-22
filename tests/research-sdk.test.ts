@@ -83,6 +83,29 @@ describe("official SDK request and response contract", () => {
     expect(body).not.toHaveProperty("text");
   });
 
+  it.each([
+    { label: "omitted unavailable fields", payload: { ticker: "NVDA", companyName: "NVIDIA", direction: "bullish", thesis: analysis.thesis }, expected: "completed" },
+    { label: "invalid quote types", payload: { ...analysis, underlyingQuote: { price: "123", currency: "USD", source } }, expected: "failed" },
+  ])("handles fenced research JSON with $label", async ({ payload, expected }) => {
+    const citation = { type: "url_citation", url: secUrl, title: "SEC", start_index: 0, end_index: 10 };
+    vi.stubGlobal("fetch", vi.fn<typeof globalThis.fetch>().mockResolvedValue(json({
+      id: "resp_fenced", object: "response", status: "completed",
+      usage: { input_tokens: 100, output_tokens: 30 },
+      output: [
+        { type: "web_search_call", status: "completed", id: "ws_fenced", action: { type: "search" } },
+        message("final_answer", [text("```json\n" + JSON.stringify(payload) + "\n```", [citation])]),
+      ],
+    })));
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live" });
+    expect(result.status).toBe(expected);
+    expect(result.requestCount).toBe(1);
+    if (expected === "completed") {
+      expect(result.candidate).toMatchObject({ price: null, sources: [expect.objectContaining({ url: secUrl })] });
+    } else {
+      expect(result.error).toContain("underlyingQuote");
+    }
+  });
+
   it("keeps recorded usage for provider refusals and returns a bounded error", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(json({
       id: "resp_refusal", object: "response", status: "completed",

@@ -237,7 +237,7 @@ export async function openAIRequest<Schema extends ZodType>(
   const format = input.minimalWebProbe ? undefined : zodTextFormat(input.schema, input.schemaName);
   // Some models reject hosted search combined with a strict response format.
   const instructions = input.web && !input.minimalWebProbe
-    ? input.instructions + "\nReturn only a JSON object matching this schema, without Markdown: " + JSON.stringify(format?.schema)
+    ? input.instructions + "\nReturn only one JSON object matching this schema. Use null for unavailable nullable fields and [] for empty lists. Put source URLs in their designated fields. Do not add Markdown or citation markers to JSON syntax. Schema: " + JSON.stringify(format?.schema)
     : input.instructions;
   // Reserve conservatively for search context and reconcile with actual usage.
   const estimatedWebContextTokens = input.web ? (input.deep ? 20_000 : 10_000) : 0;
@@ -322,12 +322,19 @@ export async function openAIRequest<Schema extends ZodType>(
 
   let json: unknown;
   try {
-    json = JSON.parse(text);
+    const fenced = input.web ? /^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i.exec(text.trim()) : null;
+    json = JSON.parse(fenced?.[1] ?? text);
   } catch {
     throw new ResearchError("SCHEMA", "OpenAI a retourné une réponse illisible.");
   }
   const parsed = input.schema.safeParse(json);
-  if (!parsed.success) throw new ResearchError("SCHEMA", "La réponse OpenAI ne respecte pas le format de recherche.");
+  if (!parsed.success) {
+    const fields = [...new Set(parsed.error.issues.flatMap(({ path }) =>
+      typeof path[0] === "string" ? [path[0]] : [],
+    ))].slice(0, 4);
+    const detail = fields.length ? ` Champs à vérifier : ${fields.join(", ")}.` : "";
+    throw new ResearchError("SCHEMA", "La réponse OpenAI ne respecte pas le format de recherche." + detail);
+  }
   return { data: parsed.data, response };
 }
 

@@ -65,7 +65,7 @@ export function checkNumericAssertion(text: string) {
 
 const sourceReferenceSchema = z.object({
   url: z.string(),
-  publishedAt: z.string().nullable(),
+  publishedAt: z.string().nullable().default(null),
 });
 
 const claimSchema = z.object({
@@ -77,21 +77,21 @@ export const screenSchema = z.object({
   ticker: z.string(),
   companyName: z.string(),
   direction: z.enum(["bullish", "bearish", "neutral", "mixed", "insufficient"]),
-  thesis: claimSchema.nullable(),
-  bullishFactors: z.array(claimSchema),
-  bearishFactors: z.array(claimSchema),
-  eventRisks: z.array(claimSchema),
-  sectorRisks: z.array(claimSchema),
-  volatilityContext: claimSchema.nullable(),
-  news: z.array(claimSchema),
-  uncertainty: z.array(z.string()),
-  earnings: z.object({ date: z.string(), source: sourceReferenceSchema }).nullable(),
+  thesis: claimSchema.nullable().default(null),
+  bullishFactors: z.array(claimSchema).default([]),
+  bearishFactors: z.array(claimSchema).default([]),
+  eventRisks: z.array(claimSchema).default([]),
+  sectorRisks: z.array(claimSchema).default([]),
+  volatilityContext: claimSchema.nullable().default(null),
+  news: z.array(claimSchema).default([]),
+  uncertainty: z.array(z.string()).default([]),
+  earnings: z.object({ date: z.string(), source: sourceReferenceSchema }).nullable().default(null),
   underlyingQuote: z.object({
     price: z.number(),
     currency: z.string(),
-    quoteAt: z.string().nullable(),
+    quoteAt: z.string().nullable().default(null),
     source: sourceReferenceSchema,
-  }).nullable(),
+  }).nullable().default(null),
 });
 
 export const discoverySchema = z.object({
@@ -101,18 +101,18 @@ export const discoverySchema = z.object({
     type: z.enum(["call", "put"]),
     expiration: z.string(),
     strike: z.number(),
-    multiplier: z.number().nullable(),
-    bid: z.number().nullable(),
-    ask: z.number().nullable(),
-    quoteAt: z.string().nullable(),
-    currency: z.string().nullable(),
-    volume: z.number().nullable(),
-    openInterest: z.number().nullable(),
-    impliedVolatility: z.number().nullable(),
+    multiplier: z.number().nullable().default(null),
+    bid: z.number().nullable().default(null),
+    ask: z.number().nullable().default(null),
+    quoteAt: z.string().nullable().default(null),
+    currency: z.string().nullable().default(null),
+    volume: z.number().nullable().default(null),
+    openInterest: z.number().nullable().default(null),
+    impliedVolatility: z.number().nullable().default(null),
     source: sourceReferenceSchema,
   })),
-  warnings: z.array(claimSchema),
-  uncertainty: z.array(z.string()),
+  warnings: z.array(claimSchema).default([]),
+  uncertainty: z.array(z.string()).default([]),
 });
 
 export type Claim = z.infer<typeof claimSchema>;
