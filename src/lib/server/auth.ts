@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { link, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { z } from 'zod'
 
@@ -71,7 +71,12 @@ function secureRequest(request?: Request) {
     Boolean(request && new URL(request.url).protocol === 'https:')
 }
 
+function cookieName(name: string, secure: boolean) {
+  return secure ? `__Host-${name}` : name
+}
+
 function readCookie(request: Request, name: string) {
+  name = cookieName(name, secureRequest(request))
   for (const field of request.headers.get('cookie')?.split(';') ?? []) {
     const [key, ...value] = field.trim().split('=')
     if (key !== name || !value.length) continue
@@ -86,7 +91,7 @@ function readCookie(request: Request, name: string) {
 function setCookie(response: Response, name: string, value: string, maxAge: number, secure: boolean) {
   const options = ['Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`]
   if (secure) options.push('Secure')
-  response.headers.append('Set-Cookie', `${name}=${encodeURIComponent(value)}; ${options.join('; ')}`)
+  response.headers.append('Set-Cookie', `${cookieName(name, secure)}=${encodeURIComponent(value)}; ${options.join('; ')}`)
 }
 
 async function demoKey() {
@@ -105,12 +110,16 @@ async function demoKey() {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
   const key = randomBytes(48).toString('base64url')
+  const temporary = `${path}.${randomUUID()}.tmp`
   try {
-    await writeFile(path, key, { flag: 'wx', mode: 0o600 })
+    await writeFile(temporary, key, { flag: 'wx', mode: 0o600 })
+    await link(temporary, path)
     return key
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     return readDemoKey(path)
+  } finally {
+    await rm(temporary, { force: true })
   }
 }
 
@@ -182,6 +191,24 @@ async function askSupabase(config: NonNullable<ReturnType<typeof supabaseConfig>
   }
 }
 
+type SupabaseConfig = NonNullable<ReturnType<typeof supabaseConfig>>
+
+function upstreamUnavailable(status: number) {
+  return status === 429 || status >= 500
+}
+
+async function refreshSession(config: SupabaseConfig, request: Request, refreshToken: string) {
+  const { status, body } = await askSupabase(config, 'token?grant_type=refresh_token', {
+    method: 'POST',
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  })
+  if (status === 200) {
+    const session = authSession.safeParse(body)
+    if (session.success) return fromSession(session.data, request)
+  }
+  if (upstreamUnavailable(status)) throw new AuthError('Le service de connexion est temporairement indisponible.', 503, 'AUTH_UNAVAILABLE')
+}
+
 export async function getIdentity(request: Request): Promise<Identity> {
   const config = supabaseConfig()
   if (config) {
@@ -194,19 +221,12 @@ export async function getIdentity(request: Request): Promise<Identity> {
           return { mode: 'live', userId: user.data.id, email: user.data.email, token, secure: secureRequest(request) }
         }
       }
-      if (status === 429 || status >= 500) throw new AuthError('Le service de connexion est temporairement indisponible.', 503, 'AUTH_UNAVAILABLE')
+      if (upstreamUnavailable(status)) throw new AuthError('Le service de connexion est temporairement indisponible.', 503, 'AUTH_UNAVAILABLE')
     }
     const refreshToken = readCookie(request, refreshCookie)
     if (refreshToken) {
-      const { status, body } = await askSupabase(config, 'token?grant_type=refresh_token', {
-        method: 'POST',
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      })
-      if (status === 200) {
-        const session = authSession.safeParse(body)
-        if (session.success) return fromSession(session.data, request)
-      }
-      if (status === 429 || status >= 500) throw new AuthError('Le service de connexion est temporairement indisponible.', 503, 'AUTH_UNAVAILABLE')
+      const session = await refreshSession(config, request, refreshToken)
+      if (session) return session
     }
     if (token || refreshToken) throw new AuthError('Votre session a expiré. Reconnectez-vous.')
   }
@@ -248,11 +268,24 @@ export async function authenticate(request: Request, credentials: { email: strin
 
 export async function logout(request: Request) {
   const config = supabaseConfig()
-  const token = readCookie(request, accessCookie)
-  if (config && token) {
-    await askSupabase(config, 'logout?scope=local', {
-      method: 'POST', headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => null)
+  if (!config) return
+
+  const revoke = (token: string) => askSupabase(config, 'logout?scope=local', {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` },
+  })
+  try {
+    const token = readCookie(request, accessCookie)
+    if (token) {
+      const { status } = await revoke(token)
+      if (status !== 401 && status !== 403) return
+    }
+    const refreshToken = readCookie(request, refreshCookie)
+    if (refreshToken) {
+      const session = await refreshSession(config, request, refreshToken)
+      if (session?.token) await revoke(session.token)
+    }
+  } catch {
+    // The route can still clear the browser cookies during a Supabase outage.
   }
 }
 

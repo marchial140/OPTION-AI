@@ -1,8 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import Decimal from 'decimal.js';
 import { initialSymbols, type BudgetReservation, type Notification, type Scan, type ScanType, type Settings, type Usage, type WorkspaceState } from '@/lib/workspace';
-import type { RiskPreferences } from '@/lib/quant';
+import { assessRisk, type RiskPreferences } from '@/lib/quant';
 import type { Identity } from './auth';
+import { currentLegSources } from './observations';
 import { portfolioExposure } from './paper';
 import { marketSession, researchAsset, researchHealth } from './research';
 import { mutateWorkspace, readWorkspace } from './store';
@@ -47,8 +48,18 @@ function boundedParameters(base: Settings, overrides?: Partial<Settings>) {
 export function queueScan(state: WorkspaceState, identity: Identity, data: {
   type: ScanType; tickers?: string[]; watchlistId?: string; overrides?: Partial<Settings>;
 }, idempotencyKey?: string, now = new Date()) {
+  const fingerprint = createHash('sha256').update(JSON.stringify(data, (_, value) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
+      : value,
+  )).digest('hex');
   const existing = idempotencyKey && state.scans.find((scan) => scan.idempotencyKey === idempotencyKey);
-  if (existing) return existing;
+  if (existing) {
+    if (existing.requestFingerprint && fingerprint !== existing.requestFingerprint) {
+      throw new JobError('Cette clé de requête est déjà associée à une autre analyse.',409,'idempotency_conflict');
+    }
+    return existing;
+  }
   if (state.scans.some(activeScan)) throw new JobError('Une analyse est déjà en cours.', 409, 'scan_active');
   if (identity.mode === 'live' && !researchHealth().configured && !state.manualQuotes.length) {
     throw new JobError('Configurez OpenAI et les hypothèses tarifaires, ou saisissez des cotations courtier.', 503, 'research_unconfigured');
@@ -64,7 +75,7 @@ export function queueScan(state: WorkspaceState, identity: Identity, data: {
   const scan: Scan = {
     id:randomUUID(), type:data.type, status:'queued', tickers, startedAt:now.toISOString(),
     completed:[], failed:[], candidates:[], opportunities:[], rejections:[], estimatedCost:0, requestCount:0,
-    stage:'En attente', parameters, idempotencyKey, cached:[],
+    stage:'En attente', parameters, idempotencyKey, requestFingerprint:idempotencyKey ? fingerprint : undefined, cached:[],
   };
   state.scans.unshift(scan);
   return scan;
@@ -76,57 +87,99 @@ export function notify(state: WorkspaceState, type: Notification['type'], messag
   state.notifications.splice(150);
 }
 
+function unknownUsage(reservation: BudgetReservation): Usage {
+  return {
+    reservationId:reservation.id, scanId:reservation.scanId,
+    model:reservation.model ?? 'inconnu', requestType:reservation.requestType ?? (reservation.scanId ? 'screen' : 'chat'),
+    estimatedCost:0, inputTokens:0, outputTokens:0, searchUsage:0, usageAvailable:false,
+    createdAt:reservation.createdAt ?? new Date(Date.parse(reservation.expiresAt) - 300_000).toISOString(),
+    unreconciledCost:reservation.estimatedCost, unreconciledSearches:reservation.estimatedSearches,
+  };
+}
+
+export function reconcileExpiredReservations(state: WorkspaceState, now = new Date()) {
+  const active: BudgetReservation[] = [];
+  for (const reservation of state.reservations) {
+    if (Date.parse(reservation.expiresAt) > now.getTime()) active.push(reservation);
+    else state.usage.push(unknownUsage(reservation));
+  }
+  state.reservations = active;
+}
+
 export function usageTotals(state: WorkspaceState, now = new Date()) {
   const today = now.toISOString().slice(0, 10);
   const month = today.slice(0, 7);
   let daily = new Decimal(0);
   let monthly = new Decimal(0);
+  let dailyUnreconciled = new Decimal(0);
+  let monthlyUnreconciled = new Decimal(0);
+  let pending = new Decimal(0);
   let requests = 0;
   let searches = 0;
-  for (const item of state.usage) {
-    if (item.createdAt.startsWith(month)) monthly = monthly.plus(item.estimatedCost);
-    if (item.createdAt.startsWith(today)) {
+  let uncertainSearches = 0;
+  for (const reservation of state.reservations) {
+    if (Date.parse(reservation.expiresAt) > now.getTime()) pending = pending.plus(reservation.estimatedCost);
+  }
+  const expired = state.reservations.filter((item) => Date.parse(item.expiresAt) <= now.getTime()).map(unknownUsage);
+  for (const item of [...state.usage, ...expired]) {
+    const date = new Date(item.createdAt).toISOString();
+    const unknown = item.unreconciledCost ?? 0;
+    if (date.startsWith(month)) {
+      monthly = monthly.plus(item.estimatedCost);
+      monthlyUnreconciled = monthlyUnreconciled.plus(unknown);
+    }
+    if (date.startsWith(today)) {
       daily = daily.plus(item.estimatedCost);
+      dailyUnreconciled = dailyUnreconciled.plus(unknown);
       searches += item.searchUsage;
+      uncertainSearches += item.unreconciledSearches ?? 0;
       requests++;
     }
   }
-  return {daily:daily.toNumber(),monthly:monthly.toNumber(),requests,searches};
+  return {
+    daily:daily.toNumber(),monthly:monthly.toNumber(),requests,searches,
+    dailyUnreconciled:dailyUnreconciled.toNumber(),monthlyUnreconciled:monthlyUnreconciled.toNumber(),
+    pending:pending.toNumber(),uncertainSearches,
+  };
 }
 
 function envBudget(configured: string | undefined, limit: number) {
   if (configured === undefined || configured.trim() === '') return limit;
   const number = Number(configured);
-  return Number.isFinite(number) && number >= 0 ? Math.min(limit, number) : limit;
+  return Number.isFinite(number) && number >= 0 ? Math.min(limit, number) : 0;
 }
 
 export function budgetHooks(identity: Identity, type: 'scan' | 'chat', scanId?: string, leaseId?: string) {
   const reserved: string[] = [];
   return {
-    async allowRequest(request: {estimatedCost:number;requestType:Usage['requestType'];estimatedSearches?:number}) {
-      if (!Number.isFinite(request.estimatedCost) || request.estimatedCost < 0) return false;
+    async allowRequest(request: {model?:string;estimatedCost:number;requestType:Usage['requestType'];estimatedSearches?:number}) {
+      const searched = request.estimatedSearches ?? (request.requestType === 'chat' ? 0 : 1);
+      if (!Number.isFinite(request.estimatedCost) || request.estimatedCost < 0 || !Number.isSafeInteger(searched) || searched < 0) return false;
       const id = randomUUID();
       const accepted = await mutateWorkspace(identity, (state) => {
         const scan = state.scans.find((item) => item.id === scanId);
-        if (type === 'scan' && (!scan || !activeScan(scan) || scan.lease?.id !== leaseId ||
-          scan.requestCount >= Math.min(scan.parameters?.maxRequestsPerScan ?? safeRequestCap(), safeRequestCap()))) return false;
         const now = new Date();
+        if (type === 'scan' && (!scan || !activeScan(scan) || !scan.lease || scan.lease.id !== leaseId ||
+          Date.parse(scan.lease.expiresAt) <= now.getTime() || scan.requestCount >= Math.min(
+            scan.parameters?.maxRequestsPerScan ?? safeRequestCap(),state.settings.maxRequestsPerScan,safeRequestCap(),
+          ))) return false;
+        reconcileExpiredReservations(state,now);
         const totals = usageTotals(state, now);
-        state.reservations = state.reservations.filter((item) => item.expiresAt > now.toISOString());
-        const held = state.reservations.reduce((sum, item) => sum.plus(item.estimatedCost), new Decimal(0));
-        const total = held.plus(request.estimatedCost);
-        const searched = request.estimatedSearches ?? (request.requestType === 'chat' ? 0 : 1);
-        const searchCapReached = searched > 0 && totals.searches + searched +
-          state.reservations.reduce((sum, item) => sum + (item.estimatedSearches ?? 0), 0) > state.settings.dailySearchLimit;
-        const daily = envBudget(process.env.AI_DAILY_BUDGET_USD, state.settings.dailyBudget);
-        const monthly = envBudget(process.env.AI_MONTHLY_BUDGET_USD, state.settings.monthlyBudget);
-        if (daily === 0 || monthly === 0 || total.plus(totals.daily).gt(daily) || total.plus(totals.monthly).gt(monthly) ||
-          searchCapReached) {
+        const total = new Decimal(totals.pending).plus(request.estimatedCost);
+        const searchCap = Math.min(state.settings.dailySearchLimit, scan?.parameters?.dailySearchLimit ?? Infinity);
+        const searchCapReached = searched > 0 && totals.searches + totals.uncertainSearches + searched +
+          state.reservations.reduce((sum, item) => sum + (item.estimatedSearches ?? 0), 0) > searchCap;
+        const daily = envBudget(process.env.AI_DAILY_BUDGET_USD, Math.min(state.settings.dailyBudget,scan?.parameters?.dailyBudget ?? Infinity));
+        const monthly = envBudget(process.env.AI_MONTHLY_BUDGET_USD, Math.min(state.settings.monthlyBudget,scan?.parameters?.monthlyBudget ?? Infinity));
+        if (daily === 0 || monthly === 0 || total.plus(totals.daily).plus(totals.dailyUnreconciled).gt(daily) ||
+          total.plus(totals.monthly).plus(totals.monthlyUnreconciled).gt(monthly) || searchCapReached) {
           notify(state, 'budget', 'La limite de recherche est atteinte.', 'budget-' + now.toISOString().slice(0, 10));
           return false;
         }
-        const reservation: BudgetReservation = {id,scanId,estimatedCost:request.estimatedCost,estimatedSearches:searched,expiresAt:new Date(Date.now() + 300_000).toISOString()};
-        state.reservations.push(reservation);
+        state.reservations.push({
+          id,scanId,model:request.model,requestType:request.requestType,estimatedCost:request.estimatedCost,
+          estimatedSearches:searched,createdAt:now.toISOString(),expiresAt:new Date(now.getTime() + 300_000).toISOString(),
+        });
         if (scan) scan.requestCount++;
         return true;
       });
@@ -134,17 +187,25 @@ export function budgetHooks(identity: Identity, type: 'scan' | 'chat', scanId?: 
       return accepted;
     },
     async recordUsage(usage: Usage) {
-      const id = reserved.shift();
+      const id = reserved[0];
+      if (!id) throw new JobError('Réservation de recherche introuvable.',500,'usage_reservation');
       await mutateWorkspace(identity, (state) => {
+        const reservation = state.reservations.find((item) => item.id === id);
+        const settled = state.usage.find((item) => item.reservationId === id);
         state.reservations = state.reservations.filter((item) => item.id !== id);
-        state.usage.push({...usage,scanId});
+        state.usage = state.usage.filter((item) => item.reservationId !== id);
+        state.usage.push({...usage,scanId,reservationId:id,createdAt:reservation?.createdAt ?? settled?.createdAt ?? usage.createdAt});
         const scan = state.scans.find((item) => item.id === scanId);
-        if (scan) scan.estimatedCost = new Decimal(scan.estimatedCost).plus(usage.estimatedCost).toNumber();
+        if (scan) scan.estimatedCost = new Decimal(scan.estimatedCost).minus(settled?.estimatedCost ?? 0).plus(usage.estimatedCost).toNumber();
       });
+      reserved.shift();
     },
     async release() {
       if (!reserved.length) return;
       await mutateWorkspace(identity, (state) => {
+        for (const reservation of state.reservations) {
+          if (reserved.includes(reservation.id)) state.usage.push(unknownUsage(reservation));
+        }
         state.reservations = state.reservations.filter((item) => !reserved.includes(item.id));
       });
       reserved.length = 0;
@@ -237,6 +298,10 @@ export async function advanceScan(identity: Identity, scanId: string, signal?: A
     if (scan.lease?.id !== leaseId || !activeScan(scan)) return scan;
     delete scan.lease;
     delete scan.current;
+    if (signal?.aborted) {
+      scan.stage = 'Analyse interrompue, en attente de reprise';
+      return scan;
+    }
     if (result.status === 'failed') scan.failed.push(claim.symbol);
     else scan.completed.push(claim.symbol);
     if (result.candidate) scan.candidates.push(result.candidate);
@@ -245,8 +310,25 @@ export async function advanceScan(identity: Identity, scanId: string, signal?: A
       scan.examinedSources = [...new Map([...(scan.examinedSources ?? []),...result.examinedSources]
         .map((source) => [source.url,source])).values()];
     }
-    scan.opportunities.push(...result.opportunities.map((item) => ({...item,id:scan.id + '-' + item.id})));
-    for (const reason of new Set([...result.rejections, ...(result.error ? [result.error] : [])])) {
+    const preferences = riskPreferences(boundedParameters(state.settings,scan.parameters));
+    const riskContext = {
+      now:new Date(), allowDemo:identity.mode === 'demo', existingRisk:portfolioExposure(state.portfolio),
+      openPositions:state.portfolio.filter((trade) => trade.status === 'open').length,
+    };
+    const rejections = [...result.rejections, ...(result.error ? [result.error] : [])];
+    for (const item of result.opportunities) {
+      if (!currentLegSources(identity.mode,item.input.legs,state.manualQuotes)) {
+        rejections.push('Une cotation a été remplacée ou retirée pendant l’analyse.');
+        continue;
+      }
+      const assessment = assessRisk(item.input,item.result,preferences,riskContext);
+      if (!assessment.eligible) {
+        rejections.push(...assessment.reasons);
+        continue;
+      }
+      scan.opportunities.push({...item,id:scan.id + '-' + item.id});
+    }
+    for (const reason of new Set(rejections)) {
       scan.rejections.push({symbol:claim.symbol,reason});
     }
     if (scan.completed.length + scan.failed.length === scan.tickers.length) finishScan(state, scan);
@@ -267,11 +349,14 @@ export async function scheduledWork(identity: Identity, now = new Date()) {
   const key = [dateParts.year,dateParts.month,dateParts.day].join('-');
   const marketTime = dateParts.hour + ':' + dateParts.minute;
   const weekday = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(dateParts.weekday);
-  const { schedule } = state.settings;
-  if (!schedule.enabled || market.status === 'holiday' || weekday === 0 || weekday === 6 ||
-    !schedule.weekdays.includes(weekday) || marketTime < schedule.time || state.lastScheduledKey === key) return null;
+  if (market.status === 'holiday' || weekday === 0 || weekday === 6) return null;
+  const due = (workspace: WorkspaceState) => {
+    const {schedule} = workspace.settings;
+    return schedule.enabled && schedule.weekdays.includes(weekday) && marketTime >= schedule.time && workspace.lastScheduledKey !== key;
+  };
+  if (!due(state)) return null;
   const queued = await mutateWorkspace(identity, (draft) => {
-    if (draft.lastScheduledKey === key || draft.scans.some(activeScan)) return null;
+    if (!due(draft) || draft.scans.some(activeScan)) return null;
     const scan = queueScan(draft,identity,{type:'quick',watchlistId:draft.settings.schedule.watchlistId ?? undefined}, 'scheduled-' + key, now);
     draft.lastScheduledKey = key;
     return scan.id;

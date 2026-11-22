@@ -1,19 +1,21 @@
+import { testOpenAIConnection } from '@/lib/server/researchOpenAI';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { demoMarket } from '@/lib/demo';
-import { assessRisk, calculateStrategy, daysToExpiration, strategyInputSchema } from '@/lib/quant';
+import { assessRisk, calculateStrategy, daysToExpiration, opportunityQuoteStatus, strategyInputSchema, validateQuote, type ContractQuote, type Opportunity } from '@/lib/quant';
 import { emptyWorkspace, portfolioAnalytics, type AppState, type Scan, type WorkspaceState } from '@/lib/workspace';
 import {
   applyIdentityCookie, authenticate, AuthError, clearAuthCookies, clearDemoCookie, demoAvailable, getIdentity, logout,
   startDemo, supabaseConfig, type Identity,
 } from '@/lib/server/auth';
 import { listScheduledIdentities, mutateWorkspace, readWorkspace, StorageError } from '@/lib/server/store';
-import { advanceScan, activeScan, budgetHooks, JobError, notify, queueScan, riskPreferences, scanSettings, scheduledWork, usageTotals } from '@/lib/server/jobs';
+import { advanceScan, activeScan, budgetHooks, JobError, notify, queueScan, reconcileExpiredReservations, riskPreferences, scanSettings, scheduledWork, usageTotals } from '@/lib/server/jobs';
 import { exitPaperTrade, openPaperTrade, PaperError, portfolioExposure } from '@/lib/server/paper';
 import { chatResearch, marketSession, researchHealth } from '@/lib/server/research';
+import { currentLegSources, sameContract, sameObservation } from '@/lib/server/observations';
 import { validateManualQuote } from '@/lib/server/researchProviders';
-import { authInput, chatInput, exitTradeInput, openTradeInput, scanInput, settingsInput, watchlistItemInput, watchlistsInput } from '@/lib/server/inputs';
+import { authInput, chatInput, exitTradeInput, openTradeInput, scanInput, settingsInput, symbolInput, watchlistInput, watchlistItemInput, watchlistsInput } from '@/lib/server/inputs';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -48,18 +50,13 @@ function enforceOrigin(request: Request) {
   }
   const requestUrl = new URL(request.url);
   const allowed = [requestUrl.origin];
-  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
-  if (forwardedHost && (forwardedProto === 'https' || forwardedProto === 'http')) {
-    allowed.push(forwardedProto + '://' + forwardedHost);
-  }
   const configuredOrigin = process.env.APP_BASE_URL;
   if (configuredOrigin && URL.canParse(configuredOrigin)) allowed.push(new URL(configuredOrigin).origin);
   if (!allowed.includes(parsed)) throw new JobError('Origine de la requête refusée.',403,'origin');
 }
 
 async function body(request: Request): Promise<unknown> {
-  if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
+  if (request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
     throw new JobError('Un corps JSON est attendu.',415,'unsupported_media');
   }
   const max = 96_000;
@@ -91,28 +88,45 @@ function idempotencyKey(request: Request) {
   return z.string().regex(/^[a-zA-Z0-9:_-]{1,100}$/).optional().parse(request.headers.get('idempotency-key') ?? undefined);
 }
 
-function safeScan(scan: Scan) {
-  const { lease, idempotencyKey, ...data } = scan;
-  void lease;
-  void idempotencyKey;
-  return data;
+function normalizeObservation(quote: ContractQuote): ContractQuote {
+  return quote.status === 'VERIFIED_DELAYED' && quote.source.method === 'manual-broker'
+    ? {...quote,status:'MANUAL_ATTESTED'} : quote;
 }
 
-function stateFor(identity: Identity, state: WorkspaceState): AppState {
-  const now = new Date();
-  const snapshots = [...state.scans].filter((scan) => scan.status === 'completed' || scan.status === 'partial');
-  const latest = snapshots[0];
-  const candidates = latest?.candidates ?? [];
+function normalizeOpportunity(item: Opportunity, now?: Date): Opportunity {
+  const legs = item.input.legs.map(normalizeObservation).map((leg) =>
+    now ? {...leg,status:validateQuote(leg,leg.symbol,now).status} : leg);
+  return {...item,status:opportunityQuoteStatus(legs),input:{...item.input,legs}};
+}
+
+function safeScan(scan: Scan) {
+  const { lease, idempotencyKey, requestFingerprint, ...data } = scan;
+  void lease;
+  void idempotencyKey;
+  void requestFingerprint;
+  return {...data,opportunities:data.opportunities.map((item) => normalizeOpportunity(item))};
+}
+
+function currentOpportunities(identity: Identity, state: WorkspaceState, scan?: Scan, now = new Date()) {
   const preferences = riskPreferences(state.settings);
   const context = {
     now, allowDemo:identity.mode === 'demo',
     existingRisk:portfolioExposure(state.portfolio),
     openPositions:state.portfolio.filter((trade) => trade.status === 'open').length,
   };
-  const opportunities = (latest?.opportunities ?? []).flatMap((item) => {
+  return (scan?.opportunities ?? []).flatMap((item) => {
+    if (!currentLegSources(identity.mode,item.input.legs,state.manualQuotes)) return [];
     const eligibility = assessRisk(item.input,item.result,preferences,context);
-    return eligibility.eligible ? [{...item,dte:daysToExpiration(item.expiration,now)}] : [];
+    return eligibility.eligible ? [{...normalizeOpportunity(item,now),dte:daysToExpiration(item.expiration,now)}] : [];
   });
+}
+
+function stateFor(identity: Identity, state: WorkspaceState): AppState {
+  const now = new Date();
+  const snapshots = state.scans.filter((scan) => scan.status === 'completed' || scan.status === 'partial');
+  const latest = snapshots[0];
+  const candidates = (latest?.candidates ?? []).filter((candidate) => (candidate.status === 'DEMO') === (identity.mode === 'demo'));
+  const opportunities = currentOpportunities(identity,state,latest,now);
   const trendByDay = new Map<string, {date:string;value:number;secondary:number}>();
   for (const scan of snapshots.toReversed()) {
     const date = (scan.completedAt ?? scan.startedAt).slice(0,10);
@@ -123,13 +137,17 @@ function stateFor(identity: Identity, state: WorkspaceState): AppState {
   const health = researchHealth();
   return {
     mode:identity.mode,user:{email:identity.email},market:marketSession(now),
-    research:{...health,model:health.model ?? undefined,demoAvailable:demoAvailable()},
+    research:{...health,model:health.model ?? undefined,demoAvailable:demoAvailable(),schedulerConfigured:Boolean(process.env.CRON_SECRET && process.env.CRON_SECRET.length >= 24)},
     settings:state.settings,watchlists:state.watchlists,scans:state.scans.map(safeScan),portfolio:state.portfolio,
-    notifications:state.notifications,manualQuotes:state.manualQuotes,candidates,opportunities,
+    notifications:state.notifications,manualQuotes:state.manualQuotes.map(normalizeObservation),candidates,opportunities,
     savedOpportunityIds:state.savedOpportunityIds ?? [],
     analytics:portfolioAnalytics(state.portfolio),cost:usageTotals(state,now),
     marketSeries:{
-      quotes:candidates.filter((item)=>item.price !== null).map((item) => ({
+      quotes:candidates.filter((item)=>item.price !== null &&
+        (identity.mode === 'demo' || ((item.status === 'VERIFIED_FRESH' || item.status === 'VERIFIED_DELAYED') &&
+          item.sources.some((source) => source.quoteAt && Date.parse(source.quoteAt) <= now.getTime() &&
+           now.getTime() - Date.parse(source.quoteAt) <= 36 * 3600_000)))
+      ).map((item) => ({
         symbol:item.symbol,name:item.name,price:item.price,change:item.change,
         quoteAt:item.sources.find((source) => source.quoteAt)?.quoteAt,
         source:item.sources.find((source) => source.quoteAt)?.publisher,status:item.status,
@@ -187,7 +205,7 @@ async function handle(request: Request, routing: Routing) {
   let response: Response;
   try {
     if (endpoint === 'health' && method === 'GET') {
-      response = NextResponse.json({status:'ok',researchConfigured:researchHealth().configured,authConfigured:Boolean(supabaseConfig())});
+      response = NextResponse.json({status:'ok',researchConfigured:researchHealth().configured,authConfigured:Boolean(supabaseConfig()),demoAvailable:demoAvailable()});
     } else if (endpoint === 'cron' && (method === 'GET' || method === 'POST')) {
       response = await cron(request);
     } else {
@@ -219,12 +237,13 @@ async function handle(request: Request, routing: Routing) {
       response = NextResponse.json({error:{code:'validation',message:'Certains champs ne correspondent pas au format attendu.',
         fields:error.issues.map((issue)=>issue.path.join('.')),requestId}},{status:422});
     } else if (error instanceof PaperError) {
-      response = NextResponse.json({error:{code:'paper_risk',message:error.message,requestId}},{status:422});
+      response = NextResponse.json({error:{code:error.code,message:error.message,requestId}},{status:error.status});
     } else {
       console.error('api request failed', {requestId,endpoint,errorType:error instanceof Error ? error.name : 'unknown'});
       response = NextResponse.json({error:{code:'internal_error',message:'Le service est temporairement indisponible.',requestId}},{status:500});
     }
   }
+  if (response.status === 429) response.headers.set('Retry-After','60');
   response.headers.set('Cache-Control','no-store');
   response.headers.set('X-Request-Id',requestId);
   return identity ? applyIdentityCookie(response,identity) : response;
@@ -263,13 +282,13 @@ async function workspaceResponse(request: Request, identity: Identity, path: str
     if (endpoint === 'opportunities') return NextResponse.json({opportunities:stateFor(identity,state).opportunities});
     if (group === 'opportunities' && id && path.length === 2) {
       const opportunity = required(state.scans.flatMap((scan)=>scan.opportunities).find((item)=>item.id===id),'Stratégie introuvable.');
-      return NextResponse.json({opportunity});
+      return NextResponse.json({opportunity:normalizeOpportunity(opportunity)});
     }
     if (endpoint === 'analytics') return NextResponse.json({analytics:portfolioAnalytics(state.portfolio)});
     if (endpoint === 'portfolio') return NextResponse.json({portfolio:state.portfolio});
     if (endpoint === 'watchlists') return NextResponse.json({watchlists:state.watchlists});
     if (endpoint === 'settings') return NextResponse.json({settings:state.settings});
-    if (endpoint === 'quotes') return NextResponse.json({quotes:state.manualQuotes});
+    if (endpoint === 'quotes') return NextResponse.json({quotes:state.manualQuotes.map(normalizeObservation)});
   }
   if (endpoint === 'scans' && method === 'POST') {
     const input = scanInput.parse(await body(request));
@@ -334,9 +353,33 @@ async function workspaceResponse(request: Request, identity: Identity, path: str
     });
     return NextResponse.json({watchlists});
   }
+  if (endpoint === 'watchlists/list' && method === 'POST') {
+    const list = watchlistInput.parse(await body(request));
+    const watchlists = await mutateWorkspace(identity,(state)=>{
+      if (state.watchlists.some((item) => item.id === list.id)) throw new JobError('Cette liste existe déjà.',409,'watchlist_exists');
+      if (state.watchlists.length >= 20) throw new JobError('Vous avez atteint la limite des listes.');
+      state.watchlists.push(list);
+      return state.watchlists;
+    });
+    return NextResponse.json({watchlists},{status:201});
+  }
+  if (group === 'watchlists' && id && action === 'items' && path.length === 4 && method === 'DELETE') {
+    const symbol = symbolInput.parse(path[3]);
+    const watchlists = await mutateWorkspace(identity,(state)=>{
+      const list = state.watchlists.find((item)=>item.id===id);
+      if (!list && id !== 'favoris') throw new JobError('Liste de suivi introuvable.',404,'not_found');
+      if (list) list.items = list.items.filter((item) => item !== symbol);
+      return state.watchlists;
+    });
+    return NextResponse.json({watchlists});
+  }
   if (endpoint === 'watchlists/items' && method === 'POST') {
     const {symbol,watchlistId} = watchlistItemInput.parse(await body(request));
     const watchlists = await mutateWorkspace(identity,(state)=>{
+      if (watchlistId === 'favoris' && !state.watchlists.some((item) => item.id === watchlistId)) {
+        if (state.watchlists.length >= 20) throw new JobError('Vous avez atteint la limite des listes.');
+        state.watchlists.push({id:watchlistId,name:'Favoris',items:[]});
+      }
       const list = required(watchlistId ? state.watchlists.find((item)=>item.id===watchlistId) : state.watchlists[0],'Liste de suivi introuvable.');
       if (!list.items.includes(symbol)) {
         if (list.items.length >= 60) throw new JobError('Cette liste a atteint sa capacité.');
@@ -366,12 +409,7 @@ async function workspaceResponse(request: Request, identity: Identity, path: str
   }
   if (endpoint === 'portfolio/trades' && method === 'POST') {
     const data = {...openTradeInput.parse(await body(request)),requestKey:idempotencyKey(request)};
-    const trade = await mutateWorkspace(identity,(state)=>{
-      try { calculateStrategy(data.input); } catch (error) {
-        throw new PaperError(error instanceof Error ? error.message : 'La stratégie est invalide.');
-      }
-      return openPaperTrade(state,identity.mode,data);
-    });
+    const trade = await mutateWorkspace(identity,(state)=>openPaperTrade(state,identity.mode,data));
     return NextResponse.json({trade},{status:201});
   }
   if (group === 'portfolio' && id === 'trades' && action && path.length === 3 && method === 'PATCH') {
@@ -385,25 +423,52 @@ async function workspaceResponse(request: Request, identity: Identity, path: str
     const result = validateManualQuote(await body(request));
     const {quote} = result;
     if (!quote) throw new JobError(result.reason,422,'quote_invalid');
-    await mutateWorkspace(identity,(state)=>{
-      state.manualQuotes = [quote,...state.manualQuotes.filter((item)=>item.id!==quote.id)].slice(0,200);
+    const saved = await mutateWorkspace(identity,(state)=>{
+      const previous = state.manualQuotes.find((item) => sameContract(item,quote));
+      if (previous && Date.parse(previous.quoteAt) >= Date.parse(quote.quoteAt)) {
+        if (sameObservation(previous,quote)) return previous;
+        throw new JobError('Une cotation plus récente ou contradictoire existe pour ce contrat.',409,'quote_conflict');
+      }
+      state.manualQuotes = [quote,...state.manualQuotes.filter((item)=>!sameContract(item,quote))].slice(0,200);
+      return quote;
     });
-    return NextResponse.json({quote},{status:201});
+    return NextResponse.json({quote:normalizeObservation(saved)},{status:201});
   }
   if (group === 'quotes' && id && path.length === 2 && method === 'DELETE') {
     await mutateWorkspace(identity,(state)=>{state.manualQuotes=state.manualQuotes.filter((item)=>item.id!==id);});
     return NextResponse.json({deleted:true});
+  }
+  if (endpoint === 'ai/connection-test' && method === 'POST') {
+    if (identity.mode === 'demo' && (
+      process.env.NODE_ENV !== 'development' || process.env.OPENAI_LOCAL_CONNECTION_TEST !== 'true' ||
+      !['localhost','127.0.0.1','[::1]'].includes(new URL(request.url).hostname)
+    )) throw new JobError('Connectez-vous ou activez le test local dans la configuration du serveur.',403,'connection_test_disabled');
+    rateLimit(identity.mode === 'demo' ? 'connection-test:local' : 'connection-test:' + identity.userId,1,60_000);
+    const hooks = budgetHooks(identity,'chat');
+    try {
+      return NextResponse.json(await testOpenAIConnection(hooks,request.signal));
+    } finally {
+      await hooks.release();
+    }
   }
   if ((endpoint === 'ai/chat' || endpoint === 'ai/research') && method === 'POST') {
     rateLimit('chat:' + identity.userId,12);
     const {message,opportunityId,history} = chatInput.parse(await body(request));
     const state = await readWorkspace(identity);
     const latest = state.scans.find((scan)=>scan.status==='completed'||scan.status==='partial');
-    const selected = opportunityId ? required(state.scans.flatMap((scan)=>scan.opportunities).find((item)=>item.id===opportunityId),'Stratégie introuvable.') : undefined;
+    const sourceScan = opportunityId ? required(
+      state.scans.find((scan) => scan.opportunities.some((item)=>item.id===opportunityId)),'Stratégie introuvable.',
+    ) : latest;
+    const current = currentOpportunities(identity,state,latest);
+    const currentSelected = current.find((item) => item.id === opportunityId);
+    const selected = currentSelected ?? sourceScan?.opportunities.find((item) => item.id === opportunityId);
     const hooks = budgetHooks(identity,'chat');
     try {
-      const context = {candidates:latest?.candidates,opportunities:selected?[selected]:latest?.opportunities,
-        rejections:latest?.rejections.map((item)=>item.symbol+' · '+item.reason)};
+      const context = {
+        candidates:selected ? sourceScan?.candidates.filter((item) => item.symbol === selected.symbol) : latest?.candidates,
+        opportunities:selected?[normalizeOpportunity(selected)]:current, archived:Boolean(selected && !currentSelected),
+        rejections:sourceScan?.rejections.map((item)=>item.symbol+' · '+item.reason),
+      };
       const result = await chatResearch({message,history,context,dataMode:identity.mode,signal:request.signal,
         allowRequest:hooks.allowRequest,recordUsage:hooks.recordUsage});
       return NextResponse.json({answer:result.answer,sources:result.sources,error:result.error});
@@ -423,6 +488,7 @@ async function workspaceResponse(request: Request, identity: Identity, path: str
       if (state.scans.some(activeScan) || state.reservations.some((reservation)=>reservation.expiresAt>new Date().toISOString())) {
         throw new JobError('Attendez la fin des recherches avant de réinitialiser les données.',409,'research_active');
       }
+      reconcileExpiredReservations(state);
       const month = new Date().toISOString().slice(0, 7);
       const budgetLedger = state.usage.filter((item) => item.createdAt.startsWith(month)).map((item) => {
         const {scanId, ...record} = item;

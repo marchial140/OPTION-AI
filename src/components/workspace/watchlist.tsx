@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ListPlus, Plus, ScanLine, Star, Trash2 } from "lucide-react";
-import type { AppState, Watchlist } from "@/lib/workspace";
-import { actionForm, dataLabels, directionLabels, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, Status, Submit, timestamp } from "./ui";
+import type { AppState } from "@/lib/workspace";
+import { actionForm, dataLabels, directionLabels, Empty, errorMessage, Field, Heading, money, newRequestId, Notice, Panel, request, SourceLink, Status, Submit, timestamp } from "./ui";
 
 const favoritesId = "favoris";
 const symbolPattern = /^[A-Z][A-Z0-9.]{0,9}$/;
@@ -44,8 +44,9 @@ export function WatchlistPage({ state, refresh }: { state: AppState; refresh: ()
     }
   };
 
-  const replaceLists = (lists: Watchlist[]) => request("/api/watchlists", "PUT", { watchlists: lists });
   const addItem = (watchlistId: string, value: string) => request("/api/watchlists/items", "POST", { watchlistId, symbol: value });
+  const removeItem = (watchlistId: string, value: string) =>
+    request(`/api/watchlists/${encodeURIComponent(watchlistId)}/items/${encodeURIComponent(value)}`, "DELETE");
 
   const add = async () => {
     if (!selected) return;
@@ -64,32 +65,31 @@ export function WatchlistPage({ state, refresh }: { state: AppState; refresh: ()
     if (saved) setSymbol("");
   };
 
-  const remove = (value: string) => void update(
-    () => replaceLists(state.watchlists.map((list) =>
-      list.id === selected?.id ? { ...list, items: list.items.filter((item) => item !== value) } : list)),
-    value + " retiré.",
-  );
+  const remove = (value: string) => {
+    if (selected) void update(() => removeItem(selected.id, value), value + " retiré.");
+  };
 
   const toggleFavorite = (value: string) => {
     const favored = Boolean(favorites?.items.includes(value));
-    const items = favored && favorites ? favorites.items.filter((item) => item !== value) : [value];
-    const list = { id: favoritesId, name: "Favoris", items };
-    const operation = favorites && !favored ?
-      () => addItem(favorites.id, value) :
-      () => replaceLists(favorites ? state.watchlists.map((item) => item.id === favoritesId ? list : item) : [...state.watchlists, list]);
+    const operation = favored ? () => removeItem(favoritesId, value) : () => addItem(favoritesId, value);
     void update(operation, favored ? value + " retiré des favoris." : value + " ajouté aux favoris.");
   };
 
   const create = async () => {
     const name = listName.trim();
     if (!name) return;
-    if (state.watchlists.some((list) => list.name.toLowerCase() === name.toLowerCase())) {
+    if (name.toLocaleLowerCase("fr") === "favoris") {
+      setError("Le nom Favoris est réservé à la liste alimentée par les étoiles.");
+      setNotice("");
+      return;
+    }
+    if (state.watchlists.some((list) => list.name.toLocaleLowerCase("fr") === name.toLocaleLowerCase("fr"))) {
       setError("Une liste porte déjà ce nom.");
       setNotice("");
       return;
     }
-    const list = { id: crypto.randomUUID(), name, items: [] };
-    if (await update(() => replaceLists([...state.watchlists, list]), "Liste créée.")) {
+    const list = { id: newRequestId(), name, items: [] };
+    if (await update(() => request("/api/watchlists/list", "POST", list), "Liste créée.")) {
       setListId(list.id);
       setListName("");
       setSearch("");
@@ -107,7 +107,7 @@ export function WatchlistPage({ state, refresh }: { state: AppState; refresh: ()
 
   return <>
     <Heading icon={ListPlus} title="Listes de suivi" detail="Organisez vos sous-jacents et accédez à leurs dernières recherches."
-      actions={<Link className="wp-button" href={selected?.items.length ? `/scanner?symbol=${encodeURIComponent(selected.items.join(", "))}` : "/scanner"}><ScanLine size={16} /> Scanner la liste</Link>} />
+      actions={selected && selected.items.length > 0 && <Link className="wp-button" href={`/scanner?watchlist=${encodeURIComponent(selected.id)}`}><ScanLine size={16} /> Scanner la liste</Link>} />
     {notice && <Notice type="success">{notice}</Notice>}
     {error && <Notice type="error">{error}</Notice>}
     <div className="wp-grid">
@@ -134,27 +134,35 @@ export function WatchlistPage({ state, refresh }: { state: AppState; refresh: ()
           <Submit pending={pending}><Plus size={15} /> Ajouter</Submit>
         </form>}
         <Field label="Rechercher un symbole"><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filtrer la liste" /></Field>
-        {items.length ? <div className="wp-table-wrap"><table className="wp-table"><thead><tr><th>Symbole</th><th>Cours de référence</th><th>Dernière recherche</th><th>Actions</th></tr></thead><tbody>
+        {items.length ? <div className="wp-table-wrap wp-watch-table" role="region" aria-label="Symboles suivis" tabIndex={0}><table className="wp-table"><thead><tr><th>Symbole</th><th>Cours du dernier scan</th><th>Dernière recherche</th><th>Actions</th></tr></thead><tbody>
           {items.map((item) => {
             const candidate = researchBySymbol.get(item);
             const latest = state.scans.find((scan) => scan.tickers.includes(item));
+            const quoteSource = candidate?.sources.find((source) => source.quoteAt);
+            const opportunity = state.opportunities.find((entry) => entry.symbol === item);
             const favored = Boolean(favorites?.items.includes(item));
             return <tr key={item}>
               <td><strong>{item}</strong>{candidate && <small>{candidate.name}</small>}</td>
-              <td data-numeric>{money(candidate?.price)}{candidate && <small><Status value={candidate.status} dictionary={dataLabels} /></small>}</td>
+              <td data-numeric>{money(candidate?.price)}
+                {candidate?.price != null && <small><Status value={candidate.status} dictionary={dataLabels} /></small>}
+                {candidate?.price != null && quoteSource?.quoteAt && <small>
+                  <SourceLink url={quoteSource.url}>{quoteSource.publisher}</SourceLink> · {timestamp(quoteSource.quoteAt)}
+                </small>}
+              </td>
               <td>{candidate ? directionLabels[candidate.direction] : "—"}<small>{timestamp(candidate?.updatedAt)}</small>{latest && <small><Status value={latest.status} /></small>}</td>
               <td><div className="wp-actions">
                 <button type="button" className="wp-button wp-icon" disabled={pending} aria-label={(favored ? "Retirer des favoris " : "Ajouter aux favoris ") + item} aria-pressed={favored} onClick={() => toggleFavorite(item)}><Star size={15} fill={favored ? "currentColor" : "none"} /></button>
                 <Link className="wp-button wp-icon" href={`/scanner?symbol=${encodeURIComponent(item)}`} aria-label={`Scanner ${item}`}><ScanLine size={15} /></Link>
                 <button type="button" className="wp-button wp-icon wp-danger" disabled={pending} aria-label={`Retirer ${item}`} onClick={() => remove(item)}><Trash2 size={15} /></button>
-              </div></td>
+              </div>{opportunity && <small><Link href={`/opportunities/${encodeURIComponent(opportunity.id)}`}>Stratégie · {item}</Link></small>}</td>
             </tr>;
           })}
         </tbody></table></div> : <Empty title="Aucun symbole affiché" detail={search ? "Modifiez le filtre pour voir d’autres symboles." : "Ajoutez un symbole pour commencer à suivre son activité."} />}
         {items.filter((item) => researchBySymbol.has(item)).slice(0, 5).map((item) => {
           const candidate = researchBySymbol.get(item)!;
           return <details className="wp-card-row" key={item}><summary>Recherche · <strong>{item}</strong></summary><p>{candidate.thesis}</p>
-            {candidate.sources.filter((source) => source.url.startsWith("https://") && !source.url.includes(".invalid")).map((source, index) => <p key={index}><a href={source.url} target="_blank" rel="noreferrer">{source.publisher}</a> · {timestamp(source.quoteAt ?? source.retrievedAt)}</p>)}
+            {candidate.sources.map((source, index) => <p key={index}><SourceLink url={source.url}>{source.publisher}</SourceLink>
+              {source.quoteAt && ` · Coté le ${timestamp(source.quoteAt)}`} · Consulté le {timestamp(source.retrievedAt)}</p>)}
           </details>;
         })}
       </Panel>

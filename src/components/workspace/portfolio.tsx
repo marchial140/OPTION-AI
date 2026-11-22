@@ -5,18 +5,25 @@ import Link from "next/link";
 import { useState } from "react";
 import { BarChart3, BriefcaseBusiness, ClipboardPenLine, Plus } from "lucide-react";
 import { calculateStrategy, strategyLabels, validateQuote } from "@/lib/quant";
-import type { AppState, PaperTrade } from "@/lib/workspace";
+import type { StrategyInput } from "@/lib/quant";
+import type { AppState, PaperTrade, Settings } from "@/lib/workspace";
 import { ContractFields, defaults, fromInput, manualInput, prefilledOpportunity } from "./strategy-lab";
-import { actionForm, dayInput, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, shortDate, Stat, Status, Submit, timestamp, useRequestKey } from "./ui";
+import { actionForm, dayInput, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, shortDate, SourceLink, Stat, Status, Submit, timestamp, usePreparedRequest } from "./ui";
 
 function transactionTime(date: string) {
   const now = new Date();
   return date === dayInput(now) ? now.toISOString() : date + "T12:00:00.000Z";
 }
 
-function EntryForm({ state, close, saved }: { state: AppState; close: () => void; saved: () => Promise<void> }) {
-  const opportunity = prefilledOpportunity(state);
-  const [config, setConfig] = useState(() => opportunity ? fromInput(opportunity.input) : defaults());
+type PaperEntry = { input: StrategyInput; entryDebit: number; entryDate: string; notes?: string; opportunityId?: string };
+type PaperClosure = { quantity: number; exitCredit: number; fees: number; exitDate: string; notes: string };
+
+function EntryForm({ opportunity, demo, prefs, close, saved }: {
+  opportunity: ReturnType<typeof prefilledOpportunity>; demo: boolean; prefs: Settings;
+  close: () => void; saved: () => Promise<void>;
+}) {
+  const [config, setConfig] = useState(() => opportunity ? fromInput(opportunity.input) :
+    defaults(demo, Math.max(prefs.minDte, prefs.avoidNearExpiration ? 3 : 0), prefs.maxDte));
   const [entryDate, setEntryDate] = useState(dayInput());
   const [customDebit, setCustomDebit] = useState("");
   const [notes, setNotes] = useState("");
@@ -24,7 +31,7 @@ function EntryForm({ state, close, saved }: { state: AppState; close: () => void
   const [lesson, setLesson] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const requestKey = useRequestKey();
+  const prepared = usePreparedRequest<PaperEntry>();
 
   let automaticDebit: number | null = null;
   try {
@@ -46,14 +53,16 @@ function EntryForm({ state, close, saved }: { state: AppState; close: () => void
         notes.trim(),
         lesson.trim() && "Leçon / point à surveiller · " + lesson.trim(),
       ].filter(Boolean).join("\n");
-      await request("/api/portfolio/trades", "POST", {
+      const linkedId = link ? opportunity.id : undefined;
+      const { body, key } = prepared.get({ config, entryDate, customDebit, journal, linkedId }, () => ({
         input,
         entryDate: transactionTime(entryDate),
         entryDebit: customDebit.trim() ? Number(customDebit) : result.entryDebit,
         notes: journal || undefined,
-        opportunityId: link ? opportunity.id : undefined,
-      }, requestKey.get({ config, entryDate, customDebit, journal }));
-      requestKey.clear();
+        opportunityId: linkedId,
+      }));
+      await request("/api/portfolio/trades", "POST", body, key);
+      prepared.clear();
       await saved();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -64,7 +73,8 @@ function EntryForm({ state, close, saved }: { state: AppState; close: () => void
 
   return <Panel title="Ouvrir une position simulée" detail="Les primes et exécutions sont saisies manuellement."
     actions={<button type="button" className="wp-button" onClick={close}>Fermer le formulaire</button>}>
-    {opportunity && <Notice>Recherche d’origine · {opportunity.symbol} · {strategyLabels[opportunity.strategy]}</Notice>}
+    {opportunity && <Notice>Recherche d’origine · {opportunity.symbol} · {strategyLabels[opportunity.strategy]}. Adaptez les primes à votre exécution simulée.</Notice>}
+    {!opportunity && demo && <Notice>Les valeurs proposées sont fictives. Vous pouvez les modifier avant l’enregistrement.</Notice>}
     <form className="wp-form" onSubmit={actionForm(() => void submit())}>
       <ContractFields id="paper" config={config} onChange={setConfig} />
       <div className="wp-fields">
@@ -90,16 +100,17 @@ function ExitForm({ trade, close, saved }: { trade: PaperTrade; close: () => voi
   const [notes, setNotes] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const requestKey = useRequestKey();
+  const prepared = usePreparedRequest<PaperClosure>();
 
   const submit = async () => {
     setError("");
     setPending(true);
     try {
-      await request(`/api/portfolio/trades/${encodeURIComponent(trade.id)}`, "PATCH", {
+      const { body, key } = prepared.get({ quantity, credit, fees, exitDate, notes }, () => ({
         quantity: Number(quantity), exitCredit: Number(credit), fees: Number(fees), exitDate: transactionTime(exitDate), notes: notes.trim(),
-      }, requestKey.get({ quantity, credit, fees, exitDate, notes }));
-      requestKey.clear();
+      }));
+      await request(`/api/portfolio/trades/${encodeURIComponent(trade.id)}`, "PATCH", body, key);
+      prepared.clear();
       await saved();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -107,6 +118,7 @@ function ExitForm({ trade, close, saved }: { trade: PaperTrade; close: () => voi
       setPending(false);
     }
   };
+  const spread = trade.input.legs.length === 2;
   const exitQuantity = Number(quantity);
   const closedCount = trade.quantity - trade.remainingQuantity;
   const realized = credit.trim() && exitQuantity > 0 && exitQuantity <= trade.remainingQuantity ?
@@ -115,7 +127,9 @@ function ExitForm({ trade, close, saved }: { trade: PaperTrade; close: () => voi
     <div className="wp-split"><strong>Enregistrer une sortie de {trade.symbol}</strong><button type="button" className="wp-button" onClick={close}>Fermer</button></div>
     <div className="wp-fields">
       <Field label="Contrats à clôturer"><input type="number" min="1" max={trade.remainingQuantity} required value={quantity} onChange={(event) => setQuantity(event.target.value)} /></Field>
-      <Field label="Crédit total de sortie (USD)" hint="Pour la quantité clôturée, hors frais."><input type="number" min="0" step=".01" required value={credit} onChange={(event) => setCredit(event.target.value)} /></Field>
+      <Field label={spread ? "Solde total de sortie (USD)" : "Crédit total de sortie (USD)"} hint={spread ? "Solde des jambes hors frais. Crédit positif, débit négatif." : "Montant pour la quantité clôturée, hors frais."}>
+        <input type="number" min={spread ? -1_000_000_000 : 0} max="1000000000" step=".01" required value={credit} onChange={(event) => setCredit(event.target.value)} />
+      </Field>
       <Field label="Frais de clôture (USD)"><input type="number" min="0" step=".01" required value={fees} onChange={(event) => setFees(event.target.value)} /></Field>
       <Field label="Date de sortie"><input type="date" required min={dayInput(new Date(trade.exits.at(-1)?.exitDate ?? trade.entryDate))} max={dayInput()} value={exitDate} onChange={(event) => setExitDate(event.target.value)} /></Field>
       <Field label="Motif, erreurs et leçons de sortie" wide><textarea maxLength={1300} value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
@@ -145,8 +159,9 @@ function referenceValue(trade: PaperTrade, quotes: AppState["manualQuotes"]) {
   return { value: value.toNumber(), pnl: value.minus(remainingEntryCost(trade)).toNumber(), asOf, legs };
 }
 
-export function PortfolioPage({ state, refresh }: { state: AppState; refresh: () => Promise<void> }) {
-  const [showForm, setShowForm] = useState(() => Boolean(prefilledOpportunity(state)));
+export function PortfolioPage({ state, refresh, opportunityId }: { state: AppState; refresh: () => Promise<void>; opportunityId?: string }) {
+  const opportunity = prefilledOpportunity(state, opportunityId);
+  const [showForm, setShowForm] = useState(Boolean(opportunity));
   const [closing, setClosing] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "closed">("all");
   const [notice, setNotice] = useState("");
@@ -164,8 +179,9 @@ export function PortfolioPage({ state, refresh }: { state: AppState; refresh: ()
       <Stat label="Positions clôturées" value={state.analytics.completedTrades} />
     </div>
     {notice && <Notice type="success">{notice}</Notice>}
+    {opportunityId && !opportunity && <Notice type="error">Le dossier lié est introuvable. Vous pouvez saisir une position simulée.</Notice>}
     <div className={showForm ? "wp-grid" : "wp-stack"}>
-      {showForm && <EntryForm state={state} close={() => setShowForm(false)} saved={async () => {
+      {showForm && <EntryForm opportunity={opportunity} demo={state.mode === "demo"} prefs={state.settings} close={() => setShowForm(false)} saved={async () => {
         await refresh(); setShowForm(false); setNotice("Position simulée enregistrée.");
       }} />}
       <Panel title="Suivi des positions" detail="Valeur courante et P&L latent disponibles uniquement avec des cotations exploitables.">
@@ -185,8 +201,8 @@ export function PortfolioPage({ state, refresh }: { state: AppState; refresh: ()
             {trade.thesis && <p>Thèse d’origine · {trade.thesis}</p>}
             {trade.notes && <p style={{ whiteSpace: "pre-wrap" }}>{trade.notes}</p>}
             <ul className="wp-sources">{trade.input.legs.map((leg, index) => <li key={leg.id}>{index ? "Vente" : "Achat"} · {leg.id}</li>)}</ul>
-            {estimate?.legs.map((quote) => quote && <p key={quote.id}><a href={quote.source.url} target="_blank" rel="noreferrer">{quote.source.publisher}</a> · {timestamp(quote.quoteAt)} · {quote.id}</p>)}
-            {trade.exits.map((exit) => <p key={exit.id}>{timestamp(exit.exitDate)} · {exit.quantity} contrat(s) · {money(exit.realizedPnl)} réalisé{exit.notes ? " · " + exit.notes : ""}</p>)}
+            {estimate?.legs.map((quote) => quote && <p key={quote.id}><SourceLink url={quote.source.url}>{quote.source.publisher}</SourceLink> · {timestamp(quote.quoteAt)} · {quote.id}</p>)}
+            {trade.exits.map((exit) => <p key={exit.id}>{timestamp(exit.exitDate)} · {exit.quantity} contrat(s) · Solde {money(exit.exitCredit)} · Frais {money(exit.fees)} · {money(exit.realizedPnl)} réalisé{exit.notes ? " · " + exit.notes : ""}</p>)}
           </details>
           {trade.status === "open" && closing !== trade.id && <div className="wp-actions"><button type="button" className="wp-button" aria-label={`Enregistrer une sortie de ${trade.symbol}`} onClick={() => { setClosing(trade.id); setNotice(""); }}>Enregistrer une sortie</button></div>}
           {closing === trade.id && trade.status === "open" && <ExitForm trade={trade} close={() => setClosing(null)} saved={async () => {

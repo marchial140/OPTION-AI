@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
-import { makeOccSymbol, type StrategyInput } from '../../src/lib/quant';
+import { makeOccSymbol, optionTradingCutoff, type StrategyInput } from '../../src/lib/quant';
 import type { AppState, PaperTrade, Scan } from '../../src/lib/workspace';
 
 async function json<T>(response: APIResponse): Promise<T> {
@@ -12,7 +12,9 @@ async function workspace(request: APIRequestContext) {
 }
 
 function longCall(quantity: number, fees: number, price: number): StrategyInput {
-  const expiration = new Date(Date.now() + 21 * 86_400_000).toISOString().slice(0, 10);
+  const date = new Date(Date.now() + 21 * 86_400_000);
+  while (optionTradingCutoff(date.toISOString().slice(0, 10)) === null) date.setUTCDate(date.getUTCDate() + 1);
+  const expiration = date.toISOString().slice(0, 10);
   const quoteAt = new Date().toISOString();
   return {
     strategy: 'long_call', quantity, fees,
@@ -125,4 +127,26 @@ test('rechecks stored opportunities against current risk while preserving scan s
   const now = await workspace(request);
   expect(now.opportunities).toEqual([]);
   expect(now.scans[0].opportunities).toEqual(before.scans[0].opportunities);
+});
+
+test('concurrent watchlist actions preserve each independent mutation', async ({ request }) => {
+  await workspace(request);
+  await json(await request.post('/api/watchlists/list',{data:{id:'parallel',name:'Parallel',items:['AMD']}}));
+  await Promise.all([
+    request.post('/api/watchlists/items',{data:{watchlistId:'parallel',symbol:'AAPL'}}),
+    request.post('/api/watchlists/items',{data:{watchlistId:'parallel',symbol:'MSFT'}}),
+    request.delete('/api/watchlists/parallel/items/AMD'),
+    request.post('/api/watchlists/items',{data:{watchlistId:'favoris',symbol:'NVDA'}}),
+  ]).then((responses) => Promise.all(responses.map(json)));
+  const final = await workspace(request);
+  expect(final.watchlists.find((item)=>item.id==='parallel')?.items.toSorted()).toEqual(['AAPL','MSFT']);
+  expect(final.watchlists.find((item)=>item.id==='favoris')?.items).toEqual(['NVDA']);
+});
+
+test('requires the JSON media type on JSON endpoints', async ({request}) => {
+  await workspace(request);
+  const response = await request.patch('/api/settings',{
+    data:'{"accountCapital":450}',headers:{'content-type':'application/jsonp'},
+  });
+  expect(response.status()).toBe(415);
 });

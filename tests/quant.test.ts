@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { makeDemoFixtures } from '@/lib/demo';
 import {
   assessRisk, calculateStrategy, constructStrategies, createPayoffSeries, daysToExpiration,
-  makeOccSymbol, payoffAt, scoreOpportunity, validateQuote, type ContractQuote, type StrategyInput,
+  makeOccSymbol, optionTradingCutoff, payoffAt, quotesAreSynchronized, scoreOpportunity, validateQuote, type ContractQuote, type StrategyInput,
 } from '@/lib/quant';
 
 const now = new Date('2026-06-01T15:00:00.000Z');
-const expiration = '2026-06-19';
+const expiration = '2026-06-18';
 
 function quote(type: ContractQuote['type'], strike: number, bid: number, ask: number, overrides: Partial<ContractQuote> = {}): ContractQuote {
   return {
@@ -32,6 +32,7 @@ describe('payoff engine', () => {
     expect(payoffAt(input, 99)).toBe(-180);
     expect(payoffAt(input, 101.8)).toBe(0);
     expect(payoffAt(input, 125)).toBe(320);
+    expect(payoffAt(input, Number.MAX_VALUE)).toBe(320);
   });
 
   it('reproduces the bear put debit spread example', () => {
@@ -47,6 +48,7 @@ describe('payoff engine', () => {
     expect(calculateStrategy(input)).toMatchObject({ entryDebit: 250, maxLoss: 250, maxProfit: null, breakEven: 102.5, rewardRisk: null });
     expect(payoffAt(input, 99)).toBe(-250);
     expect(payoffAt(input, 120)).toBe(1750);
+    expect(() => payoffAt(input, Number.MAX_VALUE)).toThrow(/plage de calcul/);
   });
 
   it('models a long put with profit capped at an underlying price of zero', () => {
@@ -119,7 +121,43 @@ describe('quote verification and ranking', () => {
     expect(validateQuote(valid, 'QQQ', now)).toMatchObject({ valid: false, status: 'CONTRADICTORY' });
     expect(validateQuote({ ...valid, id: makeOccSymbol('SPY', expiration, 'put', 100) }, 'SPY', now)).toMatchObject({ valid: false, status: 'CONTRADICTORY' });
     expect(validateQuote(valid, 'SPY', new Date('2026-06-20T15:00:00.000Z'))).toMatchObject({ valid: false, status: 'VERIFIED_HISTORICAL' });
-    expect(daysToExpiration('2026-06-19', new Date('2026-06-20T00:55:00.000Z'))).toBe(0);
+    expect(daysToExpiration(expiration, new Date('2026-06-19T00:55:00.000Z'))).toBe(0);
+  });
+
+  it('uses the New York regular cutoff on daylight saving, shortened and closed days', () => {
+    expect(optionTradingCutoff('2026-06-18')).toBe(Date.parse('2026-06-18T20:00:00Z'));
+    expect(optionTradingCutoff('2026-12-04')).toBe(Date.parse('2026-12-04T21:00:00Z'));
+    expect(optionTradingCutoff('2026-11-27')).toBe(Date.parse('2026-11-27T18:00:00Z'));
+    expect(optionTradingCutoff('2026-06-19')).toBeNull();
+    expect(optionTradingCutoff('2026-06-20')).toBeNull();
+    const valid = quote('call', 100, 2.1, 2.2, { quoteAt: '2026-06-18T19:59:00Z', retrievedAt: '2026-06-18T19:59:30Z' });
+    expect(validateQuote(valid, 'SPY', new Date('2026-06-18T19:59:30Z')).valid).toBe(true);
+    expect(validateQuote(valid, 'SPY', new Date('2026-06-18T20:00:00Z'))).toMatchObject({ valid: false, status: 'VERIFIED_HISTORICAL' });
+    expect(validateQuote({ ...valid, status: 'UNVERIFIED' }, 'SPY', new Date('2026-06-18T20:00:00Z'))).toMatchObject({ valid: false, status: 'UNVERIFIED' });
+    expect(validateQuote({ ...valid, source: { url: 'http://example.test', publisher: 'Test' } }, 'SPY', new Date('2026-06-18T20:00:00Z'))).toMatchObject({ valid: false, status: 'UNVERIFIED' });
+  });
+
+  it('keeps manual attestations distinct from exchange quote freshness', () => {
+    const input = bullCall();
+    input.legs[0].status = 'MANUAL_ATTESTED';
+    input.legs[1].status = 'VERIFIED_DELAYED';
+    input.legs[1].source.method = 'manual-broker';
+    for (const contract of input.legs) expect(validateQuote(contract, 'SPY', now)).toEqual({ valid: true, status: 'MANUAL_ATTESTED' });
+    expect(validateQuote(input.legs[0], 'SPY', new Date('2026-06-03T15:00:00.000Z'))).toMatchObject({ valid: false, status: 'STALE' });
+    expect(validateQuote(input.legs[0], 'SPY', new Date('2026-06-19T15:00:00.000Z'))).toMatchObject({ valid: false, status: 'STALE' });
+    const candidate = { ...makeDemoFixtures(now).candidates.find(({ symbol }) => symbol === 'SPY')!, status: 'UNVERIFIED' as const };
+    const result = constructStrategies(input.legs, { capital: 10_000, maxRiskPercent: 5, strategies: ['bull_call'] }, { candidate, now });
+    expect(result.opportunities[0]).toMatchObject({ status: 'MANUAL_ATTESTED', score: { breakdown: expect.arrayContaining([expect.objectContaining({ key: 'quality', value: 65 })]) } });
+  });
+
+  it('rejects spreads that combine individually valid quotes observed too far apart', () => {
+    const input = bullCall();
+    input.legs[1].quoteAt = '2026-06-01T14:49:59Z';
+    expect(input.legs.every((contract) => validateQuote(contract, 'SPY', now).valid)).toBe(true);
+    expect(quotesAreSynchronized(input.legs)).toBe(false);
+    expect(assessRisk(input, calculateStrategy(input), { capital: 10000, maxRiskPercent: 5 }, { now })).toMatchObject({ eligible: false, reasons: [expect.stringContaining('plus de cinq minutes')] });
+    input.legs[1].quoteAt = '2026-06-01T14:50:00Z';
+    expect(quotesAreSynchronized(input.legs)).toBe(true);
   });
 
   it('enforces the $22.50 trade limit for $450 capital and 5% risk', () => {
@@ -155,9 +193,12 @@ describe('quote verification and ranking', () => {
     const prefs = { capital: 10_000, maxRiskPercent: 5, strategies: ['bull_call'] as const };
     const withDuplicates = constructStrategies([long, short, long], { ...prefs, strategies: [...prefs.strategies] }, { candidate, now });
     expect(withDuplicates.opportunities).toHaveLength(1);
-    const conflict = constructStrategies([long, short, { ...long, ask: 3.3 }], { ...prefs, strategies: [...prefs.strategies] }, { candidate, now });
+    const conflict = constructStrategies([long, short, { ...long, ask: 3.3, quoteAt: '2026-06-01T10:55:00-04:00' }], { ...prefs, strategies: [...prefs.strategies] }, { candidate, now });
     expect(conflict.opportunities).toHaveLength(0);
     expect(conflict.rejections.join(' ')).toContain('contradictoires');
+    const newQuote = { ...long, ask: 3.15, quoteAt: '2026-06-01T14:56:00Z' };
+    const recovered = constructStrategies([long, short, { ...long, ask: 3.3 }, newQuote], { ...prefs, strategies: [...prefs.strategies] }, { candidate, now });
+    expect(recovered.opportunities[0]?.input.legs[0].ask).toBe(3.15);
     expect(constructStrategies([], { ...prefs, strategies: [...prefs.strategies] }, { candidate, now }).rejections[0]).toContain('Aucune cotation');
   });
 

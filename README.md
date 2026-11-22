@@ -71,4 +71,10 @@ supabase/          PostgreSQL migrations and row ownership policies
 tests/             Financial, service, and browser checks
 ```
 
-Additional documentation covers [architecture](ARCHITECTURE.md), [implementation phases](IMPLEMENTATION_PLAN.md), and [testing](TESTING.md).
+Additional documentation covers [architecture](ARCHITECTURE.md), [implementation phases](IMPLEMENTATION_PLAN.md), [testing](TESTING.md), and the [production-readiness audit](AUDIT_REPORT.md).
+
+## Test your OpenAI connection
+
+On your Mac, copy `.env.example` to `.env.local` if it does not already exist. Enter your key as `OPENAI_API_KEY` in that local file and set `OPENAI_MODEL` and the three base pricing variables to the rates for your OpenAI project. Git ignores `.env.local`.
+
+For a local demo, set `OPENAI_LOCAL_CONNECTION_TEST=true` and restart with `npm run dev -- --hostname 127.0.0.1`. Open `http://localhost:3000` and choose **Paramètres → Diagnostics des sources → Tester la connexion OpenAI**. A signed-in workspace can also use the test. It makes one billed Responses request with at most one web search tool call, subject to the workspace budget, and displays the result and estimated cost. Demo market workflows continue to use their demo data.

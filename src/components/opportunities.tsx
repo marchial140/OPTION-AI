@@ -3,7 +3,7 @@
 import { Bookmark, ChartNoAxesCombined, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, Filter, FlaskConical, GitCompareArrows, Info, Layers3, ListFilter, Radar, Search, ShieldCheck, Wallet, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { payoffAt, strategyLabels, type Opportunity, type ResearchCandidate } from "@/lib/quant";
 import type { AppState } from "@/lib/workspace";
@@ -15,7 +15,7 @@ const directionNames = { bullish: "Haussier", bearish: "Baissier", neutral: "Neu
 const statusNames: Record<string, string> = {
   DEMO: "Démo", VERIFIED_FRESH: "Vérifiée · récente", VERIFIED_DELAYED: "Vérifiée · différée",
   VERIFIED_HISTORICAL: "Historique", STALE: "Périmée", UNVERIFIED: "Non vérifiée",
-  INSUFFICIENT: "Données insuffisantes", CONTRADICTORY: "Contradictoire",
+  INSUFFICIENT: "Données insuffisantes", CONTRADICTORY: "Contradictoire", MANUAL_ATTESTED: "Courtier · attestée",
 };
 
 type Column = "price" | "direction" | "expiration" | "dte" | "debit" | "risk" | "profit" | "ratio" | "score" | "status" | "updated";
@@ -31,26 +31,41 @@ const compactColumns: Column[] = ["direction", "dte", "debit", "risk", "profit",
 
 export function Opportunities({ state, detail, refresh }: { state: AppState; detail?: string; refresh: () => Promise<void> }) {
   const queryParams = useSearchParams();
+  return <OpportunityWorkspace
+    key={queryParams.toString()}
+    state={state}
+    detail={detail}
+    refresh={refresh}
+    initialQuery={queryParams.get("q") ?? ""}
+    initialView={queryParams.get("view")}
+    comparisonId={queryParams.get("compare")}
+  />;
+}
+
+function OpportunityWorkspace({ state, detail, refresh, initialQuery, initialView, comparisonId }: {
+  state: AppState; detail?: string; refresh: () => Promise<void>; initialQuery: string;
+  initialView: string | null; comparisonId: string | null;
+}) {
   const [tab, setTab] = useState<"ranked" | "research" | "saved" | null>(null);
-  const [search, setSearch] = useState(queryParams?.get("q") ?? "");
+  const [search, setSearch] = useState(initialQuery);
   const [direction, setDirection] = useState("");
   const [strategy, setStrategy] = useState("");
   const [status, setStatus] = useState("");
   const [showColumns, setShowColumns] = useState(false);
   const [columns, setColumns] = useState<Column[]>(initialColumns);
-  const [compareIds, setCompareIds] = useState<string[]>(() => {
-    const id = queryParams?.get("compare");
-    return id ? [id] : [];
-  });
+  const [compareIds, setCompareIds] = useState<string[]>(comparisonId ? [comparisonId] : []);
   const [comparing, setComparing] = useState(false);
-  const queryView = queryParams?.get("view");
-  const effectiveTab = tab ?? (queryView === "research" || queryView === "saved" ? queryView : "ranked");
-  const allOpportunities = new Map<string, Opportunity>();
-  for (const item of [...state.opportunities, ...state.scans.flatMap((scan) => scan.opportunities)]) {
-    if (!allOpportunities.has(item.id)) allOpportunities.set(item.id, item);
-  }
-  const selected = [...allOpportunities.values()].filter((item) => compareIds.includes(item.id));
-  const savedOpportunities = [...allOpportunities.values()].filter((item) => state.savedOpportunityIds?.includes(item.id));
+  const effectiveTab = tab ?? (initialView === "research" || initialView === "saved" ? initialView : "ranked");
+  const allOpportunities = useMemo(() => {
+    const byId = new Map<string, Opportunity>();
+    for (const item of [...state.opportunities, ...state.scans.flatMap((scan) => scan.opportunities)]) {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    }
+    return byId;
+  }, [state.opportunities, state.scans]);
+  const validComparisonIds = compareIds.filter((id) => allOpportunities.has(id));
+  const selected = validComparisonIds.flatMap((id) => allOpportunities.get(id) ?? []);
+  const savedOpportunities = [...allOpportunities.values()].filter((item) => state.savedOpportunityIds.includes(item.id));
   const term = search.trim().toLocaleLowerCase("fr");
 
   if (detail) {
@@ -59,48 +74,69 @@ export function Opportunities({ state, detail, refresh }: { state: AppState; det
     if (!item) return <section className="empty-state panel"><ChartNoAxesCombined size={24} /><h1>Opportunité introuvable</h1><p>Ce rapport n’est plus disponible dans votre espace de travail.</p><Link href="/opportunities" className="button button-secondary">Toutes les opportunités</Link></section>;
     const scan = state.scans.find((scan) => scan.opportunities.some((opportunity) => opportunity.id === detail));
     const candidate = (current ? state.candidates : scan?.candidates)?.find((candidate) => candidate.symbol === item.symbol);
-    return <OpportunityDetail opportunity={item} candidate={candidate} refresh={refresh} isDemo={state.mode === "demo"} isArchived={!current} isSaved={state.savedOpportunityIds?.includes(item.id) ?? false} />;
+    return <OpportunityDetail opportunity={item} candidate={candidate} refresh={refresh} isDemo={state.mode === "demo"} isArchived={!current} isSaved={state.savedOpportunityIds.includes(item.id)} watched={state.watchlists.some((list) => list.items.includes(item.symbol))} />;
   }
 
   function toggleComparison(id: string) {
-    setCompareIds((current) => current.includes(id) ? current.filter((entry) => entry !== id) : current.length >= 3 ? current : [...current, id]);
+    setCompareIds(validComparisonIds.includes(id) ? validComparisonIds.filter((entry) => entry !== id) : validComparisonIds.length >= 3 ? validComparisonIds : [...validComparisonIds, id]);
     setComparing(false);
   }
 
   const filterSymbol = (item: { symbol: string; name: string }) => !term || `${item.symbol} ${item.name}`.toLocaleLowerCase("fr").includes(term);
   const candidates = state.candidates.filter((item) => filterSymbol(item) && (!direction || item.direction === direction));
   const tabOpportunities = effectiveTab === "saved" ? savedOpportunities : state.opportunities;
-  const opportunities = tabOpportunities.filter((item) => filterSymbol(item) && (!direction || item.direction === direction) && (!strategy || item.strategy === strategy) && (!status || item.status === status));
   const availableStatuses = [...new Set(tabOpportunities.map((item) => item.status))];
+  const activeStatus = availableStatuses.some((value) => value === status) ? status : "";
+  const opportunities = tabOpportunities.filter((item) => filterSymbol(item) && (!direction || item.direction === direction) && (!strategy || item.strategy === strategy) && (!activeStatus || item.status === activeStatus));
+  const filtering = Boolean(term || direction || (effectiveTab !== "research" && (strategy || activeStatus)));
+  const containsManual = state.opportunities.some((item) => item.status === "MANUAL_ATTESTED");
+
+  function resetFilters() {
+    setSearch("");
+    setDirection("");
+    setStrategy("");
+    setStatus("");
+  }
 
   return <div className="opportunities-page">
     <div className="page-heading">
       <div><h1>Opportunités</h1><p>Comparez les stratégies admissibles et consultez les thèses documentées par le scanner.</p></div>
-      <Link href="/scanner" className="button button-primary"><Radar size={16} /> Scanner le marché</Link>
+      <div className="opportunity-heading-actions">
+        {effectiveTab !== "research" && selected.length > 0 && <a href="#opportunity-comparison" className="button button-secondary"><GitCompareArrows size={16} /> Comparateur ({selected.length})</a>}
+        <Link href="/scanner" className="button button-primary"><Radar size={16} /> Scanner le marché</Link>
+      </div>
     </div>
     <div className="opportunities-tabs" aria-label="Ensembles de résultats">
-      <button className={effectiveTab === "ranked" ? "active" : ""} aria-pressed={effectiveTab === "ranked"} onClick={() => setTab("ranked")}><ShieldCheck size={16} /> {state.mode === "demo" ? "Stratégies de démonstration" : "Opportunités vérifiées"} <span>{state.opportunities.length}</span></button>
+      <button className={effectiveTab === "ranked" ? "active" : ""} aria-pressed={effectiveTab === "ranked"} onClick={() => setTab("ranked")}><ShieldCheck size={16} /> {state.mode === "demo" ? "Stratégies de démonstration" : containsManual ? "Opportunités admissibles" : "Opportunités vérifiées"} <span>{state.opportunities.length}</span></button>
       <button className={effectiveTab === "research" ? "active" : ""} aria-pressed={effectiveTab === "research"} onClick={() => setTab("research")}><Radar size={16} /> Candidats de recherche <span>{state.candidates.length}</span></button>
       <button className={effectiveTab === "saved" ? "active" : ""} aria-pressed={effectiveTab === "saved"} onClick={() => setTab("saved")}><Bookmark size={16} /> Enregistrées <span>{savedOpportunities.length}</span></button>
     </div>
     <section className="panel opportunities-panel" aria-label={effectiveTab === "research" ? "Candidats de recherche" : "Stratégies"}>
       <div className="opportunities-toolbar">
-        <label className="opportunities-search"><Search size={17} /><input aria-label="Rechercher un symbole ou une société" placeholder="Rechercher un symbole…" value={search} onChange={(event) => setSearch(event.target.value)} />{search && <button className="opportunities-clear" onClick={() => setSearch("")} aria-label="Effacer la recherche"><X size={14} /></button>}</label>
+        <div className="opportunities-search"><Search size={17} /><input type="search" aria-label="Rechercher un symbole ou une société" placeholder="Rechercher un symbole…" value={search} onChange={(event) => setSearch(event.target.value)} />{search && <button type="button" className="opportunities-clear" onClick={() => setSearch("")} aria-label="Effacer la recherche"><X size={14} /></button>}</div>
         <label className="opportunities-select"><Filter size={15} /><select aria-label="Filtrer par direction" value={direction} onChange={(event) => setDirection(event.target.value)}><option value="">Tous les biais</option>{Object.entries(directionNames).map(([key, value]) => <option value={key} key={key}>{value}</option>)}</select><ChevronDown size={13} /></label>
         {effectiveTab !== "research" && <>
           <label className="opportunities-select"><Layers3 size={15} /><select aria-label="Filtrer par stratégie" value={strategy} onChange={(event) => setStrategy(event.target.value)}><option value="">Toutes les stratégies</option>{Object.entries(strategyLabels).map(([key, value]) => <option value={key} key={key}>{value}</option>)}</select><ChevronDown size={13} /></label>
-          <label className="opportunities-select"><ShieldCheck size={15} /><select aria-label="Filtrer par statut des données" value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Tous les statuts</option>{availableStatuses.map((value) => <option value={value} key={value}>{statusNames[value] ?? value}</option>)}</select><ChevronDown size={13} /></label>
-          <div className="opportunities-columns">
-            <button className="button button-secondary" onClick={() => setShowColumns((value) => !value)} aria-expanded={showColumns}><ListFilter size={17} /> Colonnes</button>
-            {showColumns && <div className="opportunities-column-popover"><strong>Colonnes visibles</strong>{fullColumns.map((column) => <label key={column.key}><input type="checkbox" checked={columns.includes(column.key)} onChange={() => setColumns((value) => value.includes(column.key) ? value.filter((item) => item !== column.key) : [...value, column.key])} />{column.label}</label>)}</div>}
+          <label className="opportunities-select"><ShieldCheck size={15} /><select aria-label="Filtrer par statut des données" value={activeStatus} onChange={(event) => setStatus(event.target.value)}><option value="">Tous les statuts</option>{availableStatuses.map((value) => <option value={value} key={value}>{statusNames[value] ?? value}</option>)}</select><ChevronDown size={13} /></label>
+          <div className="opportunities-columns" onBlur={(event) => {
+            if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setShowColumns(false);
+          }} onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.currentTarget.querySelector("button")?.focus();
+              setShowColumns(false);
+            }
+          }}>
+            <button className="button button-secondary" onClick={() => setShowColumns((value) => !value)} aria-expanded={showColumns} aria-controls={showColumns ? "opportunity-columns-popover" : undefined}><ListFilter size={17} /> Colonnes</button>
+            {showColumns && <div className="opportunities-column-popover" id="opportunity-columns-popover"><strong>Colonnes visibles</strong>{fullColumns.map((column) => <label key={column.key}><input type="checkbox" checked={columns.includes(column.key)} onChange={() => setColumns((value) => value.includes(column.key) ? value.filter((item) => item !== column.key) : [...value, column.key])} />{column.label}</label>)}</div>}
           </div>
         </>}
+        {filtering && <button className="button button-secondary" onClick={resetFilters}>Effacer les filtres</button>}
       </div>
       {effectiveTab === "saved" && <div className="opportunity-saved-note"><Info size={15} /> Les stratégies archivées conservent leur statut et leur score à la date du scan.</div>}
       {effectiveTab === "saved" && !savedOpportunities.length ? <div className="empty-state opportunities-empty"><Bookmark size={24} /><strong>Aucune stratégie enregistrée.</strong><p>Enregistrez un rapport depuis sa page d’analyse pour le retrouver ici.</p></div> :
-        effectiveTab !== "research" ? <OpportunityTable opportunities={opportunities} columns={columns} checked={compareIds} onCompare={toggleComparison} scopeKey={`${term}|${direction}|${strategy}|${status}`} /> : <CandidateList candidates={candidates} />}
+        effectiveTab !== "research" ? <OpportunityTable opportunities={opportunities} columns={columns} checked={validComparisonIds} onCompare={toggleComparison} filtered={filtering} scopeKey={`${effectiveTab}|${term}|${direction}|${strategy}|${activeStatus}`} /> : <CandidateList candidates={candidates} />}
     </section>
-    {effectiveTab !== "research" && compareIds.length > 0 && <section className="panel opportunities-comparison" aria-label="Comparateur de stratégies">
+    {effectiveTab !== "research" && selected.length > 0 && <section className="panel opportunities-comparison" id="opportunity-comparison" aria-label="Comparateur de stratégies">
       <div className="panel-heading"><div><h2><GitCompareArrows size={18} /> Comparateur</h2><p>{selected.length} / 3 sélectionnées</p></div><div className="opportunities-comparison-actions"><button className="button button-secondary" onClick={() => { setCompareIds([]); setComparing(false); }}>Effacer</button><button className="button button-primary" disabled={selected.length < 2} onClick={() => setComparing((value) => !value)}>{comparing ? "Fermer" : "Comparer"}</button></div></div>
       <div className="opportunities-compare-pills">{selected.map((item) => <button className="badge" key={item.id} onClick={() => toggleComparison(item.id)} aria-label={`Retirer ${item.symbol} ${strategyLabels[item.strategy]}`}>{item.symbol} · {strategyLabels[item.strategy]} <X size={13} /></button>)}</div>
       {comparing && <div className="opportunities-compare-results">{selected.map((item) => <div key={item.id}><h3>{item.symbol} · {strategyLabels[item.strategy]}</h3><dl><dt>Débit</dt><dd>{usd(item.result.entryDebit)}</dd><dt>Perte maximale</dt><dd>{usd(item.result.maxLoss)}</dd><dt>Gain maximal</dt><dd>{usd(item.result.maxProfit, "Illimité")}</dd><dt>Seuil de rentabilité</dt><dd>{usd(item.result.breakEven)}</dd></dl><PayoffChart item={item} title={`Profil de ${item.symbol}`} /><Link href={`/opportunities/${encodeURIComponent(item.id)}`} className="button button-secondary">Ouvrir l’analyse</Link></div>)}</div>}
@@ -108,8 +144,8 @@ export function Opportunities({ state, detail, refresh }: { state: AppState; det
   </div>;
 }
 
-export function OpportunityTable({ opportunities, compact, columns, checked, onCompare, scopeKey = "" }: {
-  opportunities: Opportunity[]; compact?: boolean; columns?: Column[]; checked?: string[]; onCompare?: (id: string) => void; scopeKey?: string;
+export function OpportunityTable({ opportunities, compact, columns, checked, onCompare, filtered, scopeKey = "" }: {
+  opportunities: Opportunity[]; compact?: boolean; columns?: Column[]; checked?: string[]; onCompare?: (id: string) => void; filtered?: boolean; scopeKey?: string;
 }) {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "score", desc: true });
   const [pagination, setPagination] = useState({ scope: scopeKey, index: 0 });
@@ -117,13 +153,14 @@ export function OpportunityTable({ opportunities, compact, columns, checked, onC
   const sorted = useMemo(() => [...opportunities].sort((a, b) => {
     const first = sortValue(a, sort.key);
     const second = sortValue(b, sort.key);
-    if (first === null || second === null) return first === second ? 0 : first === null ? 1 : -1;
+    if (first === second) return 0;
+    if (first === null || second === null) return first === null ? 1 : -1;
     const comparison = typeof first === "number" && typeof second === "number" ? first - second : String(first).localeCompare(String(second), "fr");
     return sort.desc ? -comparison : comparison;
   }), [opportunities, sort]);
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const page = Math.min(pagination.scope === scopeKey ? pagination.index : 0, totalPages - 1);
-  const rows = compact ? sorted : sorted.slice(page * pageSize, (page + 1) * pageSize);
+  const rows = compact ? sorted.slice(0, 5) : sorted.slice(page * pageSize, (page + 1) * pageSize);
 
   function sortColumn(key: SortKey) {
     setSort((current) => ({ key, desc: current.key === key ? !current.desc : key === "score" }));
@@ -136,10 +173,10 @@ export function OpportunityTable({ opportunities, compact, columns, checked, onC
     </th>;
   }
 
-  if (!rows.length) return <div className="empty-state opportunities-empty"><ChartNoAxesCombined size={24} /><strong>Aucune opportunité ne respecte actuellement vos critères.</strong><p>Les opportunités s’affichent lorsque les données disponibles et les limites configurées permettent de construire une stratégie.</p>{!scopeKey.replaceAll("|", "") && <Link href="/scanner" className="button button-secondary"><Radar size={15} /> Ouvrir le scanner</Link>}</div>;
+  if (!rows.length) return <div className="empty-state opportunities-empty"><ChartNoAxesCombined size={24} /><strong>{filtered ? "Aucun résultat pour ces filtres." : "Aucune opportunité ne respecte actuellement vos critères."}</strong><p>{filtered ? "Modifiez les critères de la liste pour élargir les résultats." : "Les opportunités s’affichent lorsque les données disponibles et les limites configurées permettent de construire une stratégie."}</p>{!filtered && <Link href="/scanner" className="button button-secondary"><Radar size={15} /> Ouvrir le scanner</Link>}</div>;
 
   return <>
-    <div className="opportunities-table-scroll">
+    <div className="opportunities-table-scroll" tabIndex={0} role="region" aria-label="Tableau des stratégies">
       <table className="opportunities-table">
         <thead><tr>
           {onCompare && <th scope="col" className="opportunities-check-col"><span className="sr-only">Comparer</span><GitCompareArrows aria-hidden="true" size={15} /></th>}
@@ -180,9 +217,12 @@ function sortValue(item: Opportunity, key: SortKey) {
   switch (key) {
     case "debit": return item.result.entryDebit;
     case "risk": return item.result.maxLoss;
-    case "profit": return item.result.maxProfit;
+    case "profit": return item.result.maxProfit ?? Number.POSITIVE_INFINITY;
     case "ratio": return item.result.rewardRisk;
     case "score": return item.score?.total ?? null;
+    case "strategy": return strategyLabels[item.strategy];
+    case "direction": return directionNames[item.direction];
+    case "status": return statusNames[item.status] ?? item.status;
     case "updated": return item.updatedAt;
     default: return item[key];
   }
@@ -205,12 +245,14 @@ function CandidateList({ candidates }: { candidates: ResearchCandidate[] }) {
   })}</div>;
 }
 
-function OpportunityDetail({ opportunity: item, candidate, refresh, isDemo, isArchived, isSaved }: {
-  opportunity: Opportunity; candidate?: ResearchCandidate; refresh: () => Promise<void>; isDemo: boolean; isArchived: boolean; isSaved: boolean;
+function OpportunityDetail({ opportunity: item, candidate, refresh, isDemo, isArchived, isSaved, watched }: {
+  opportunity: Opportunity; candidate?: ResearchCandidate; refresh: () => Promise<void>; isDemo: boolean; isArchived: boolean; isSaved: boolean; watched: boolean;
 }) {
   const [watchStatus, setWatchStatus] = useState<"" | "saving" | "saved" | "failed">("");
   const [bookmarkStatus, setBookmarkStatus] = useState<"" | "saving" | "failed">("");
   const priceAnchor = item.price ?? item.input.legs[0]?.strike ?? 0;
+  const underlyingEvidence = candidate?.sources.find((source) => source.quoteAt);
+  const isManual = item.status === "MANUAL_ATTESTED";
   const scenarios = [[-0.10, "Forte baisse"], [-0.05, "Baisse modérée"], [0, "Stabilité"], [0.05, "Hausse modérée"], [0.10, "Forte hausse"]] as const;
   async function watch() {
     setWatchStatus("saving");
@@ -239,13 +281,13 @@ function OpportunityDetail({ opportunity: item, candidate, refresh, isDemo, isAr
     <Link href="/opportunities" className="opportunity-back"><ChevronLeft size={16} /> Toutes les opportunités</Link>
     <div className="page-heading">
       <div><div className="opportunity-detail-symbol"><SymbolMark symbol={item.symbol} /><h1>{item.symbol} <span>{strategyLabels[item.strategy]}</span></h1></div>
-        <p>{item.name} · Échéance {formatDate(item.expiration, false)} · {item.dte} jours à la date du scan</p>
+        <p>{item.name} · Échéance {formatDate(item.expiration, false)} · {item.dte} j {isArchived ? "à la date du scan" : "restant à courir"}</p>
       </div>
       <div className="opportunity-detail-status"><Quality value={item.status} />{isArchived && <span className="badge">Archivée</span>}</div>
     </div>
     <div className="opportunity-detail-actions">
       <button className="button button-secondary" onClick={() => void bookmark()} disabled={bookmarkStatus === "saving"} aria-pressed={isSaved}>{isSaved ? <Check size={16} /> : <Bookmark size={16} />} {isSaved ? "Retirer des enregistrements" : "Enregistrer la recherche"}</button>
-      <button className="button button-secondary" onClick={() => void watch()} disabled={watchStatus === "saved" || watchStatus === "saving"}>{watchStatus === "saved" ? <Check size={16} /> : <Layers3 size={16} />} {watchStatus === "saved" ? "Ajouté à la liste" : watchStatus === "saving" ? "Ajout en cours…" : "Suivre le symbole"}</button>
+      {watched || watchStatus === "saved" ? <Link className="button button-secondary" href="/watchlist"><Check size={16} /> Symbole suivi</Link> : <button className="button button-secondary" onClick={() => void watch()} disabled={watchStatus === "saving"}><Layers3 size={16} /> {watchStatus === "saving" ? "Ajout en cours…" : "Suivre le symbole"}</button>}
       <Link href={`/opportunities?compare=${encodeURIComponent(item.id)}`} className="button button-secondary"><GitCompareArrows size={16} /> Comparer</Link>
       <Link href={`/strategy-lab?opportunity=${encodeURIComponent(item.id)}`} className="button button-secondary"><FlaskConical size={16} /> Ouvrir au laboratoire</Link>
       <button className="button button-secondary" onClick={() => exportOpportunity(item)}><Download size={16} /> Exporter</button>
@@ -254,28 +296,28 @@ function OpportunityDetail({ opportunity: item, candidate, refresh, isDemo, isAr
     </div>
     {watchStatus === "failed" && <p className="text-negative" role="alert">Le symbole n’a pas pu être ajouté à la liste.</p>}
     {bookmarkStatus === "failed" && <p className="text-negative" role="alert">La mise à jour des recherches enregistrées a échoué.</p>}
-    <div className="opportunity-provenance-note"><Info size={17} /> {isDemo ? "Simulation avec cotations entièrement fictives." : isArchived ? "Rapport archivé. Les cotations reflètent la date du scan." : "Cotation de recherche. Vérifiez la disponibilité et les prix auprès de votre courtier."} Les gains et pertes ci-dessous sont calculés à l’échéance.</div>
+    <div className="opportunity-provenance-note"><Info size={17} /> <span>{isDemo ? "Simulation avec cotations entièrement fictives. " : isManual ? "Cotations courtier attestées par l’utilisateur. Estimation indicative. " : "Les cotations de recherche sont indicatives. "}{isArchived && `Rapport archivé. Les valeurs reflètent le relevé du ${formatDate(item.updatedAt)} (HE). `}Les gains et pertes ci-dessous sont calculés à l’échéance.</span></div>
     <div className="opportunity-metrics">
-      <Metric label="Cours de référence" value={usd(item.price)} />
-      <Metric label="Débit d’entrée" value={usd(item.result.entryDebit)} />
+      <Metric label="Cours de référence" value={usd(item.price)} detail={item.price !== null && underlyingEvidence?.quoteAt ? <><SourceLink url={underlyingEvidence.url} publisher={underlyingEvidence.publisher} isDemo={isDemo} /> · {formatDate(underlyingEvidence.quoteAt)} (HE)</> : null} />
+      <Metric label="Débit d’entrée" value={usd(item.result.entryDebit)} detail={item.result.fees ? `Frais de ${usd(item.result.fees)} en sus` : undefined} />
       <Metric label="Perte maximale" value={usd(item.result.maxLoss)} tone="text-negative" />
       <Metric label="Gain maximal" value={usd(item.result.maxProfit, "Illimité")} tone="text-positive" />
       <Metric label="Seuil de rentabilité" value={usd(item.result.breakEven)} />
-      <Metric label="Gain / risque" value={item.result.rewardRisk === null ? "—" : `${numberFormat.format(item.result.rewardRisk)}×`} />
+      <Metric label="Gain / risque" value={item.result.rewardRisk === null ? "—" : `${numberFormat.format(item.result.rewardRisk)}×`} detail={item.result.returnOnRisk !== null ? `Rendement sur risque maximal de ${numberFormat.format(item.result.returnOnRisk)} %` : undefined} />
     </div>
     <div className="opportunity-detail-grid">
-      <section className="panel opportunity-detail-panel"><div className="panel-heading"><div><h2>Profil à l’échéance</h2><p>Résultat selon le cours du sous-jacent · USD</p></div><ChartNoAxesCombined size={18} /></div><PayoffChart item={item} title={`Profil à l’échéance de ${item.symbol}`} /></section>
+      <section className="panel opportunity-detail-panel"><div className="panel-heading"><div><h2>Profil à l’échéance</h2><p>Résultat selon le cours du sous-jacent · USD</p></div><ChartNoAxesCombined size={18} /></div><PayoffChart item={item} title={`Profil à l’échéance de ${item.symbol}`} /><div className="payoff-legend"><span><i />Prix d’exercice</span>{item.result.breakEven !== null && <span><i />Seuil de rentabilité</span>}</div></section>
       <section className="panel opportunity-detail-panel"><div className="panel-heading"><div><h2>Score de recherche</h2><p>Critères de classement</p></div>{item.score && <strong className="opportunity-large-score">{item.score.total}<small>/100</small></strong>}</div>
         {item.score ? <ul className="opportunity-score-list">{item.score.breakdown.map((component) => <li key={component.key}><div><strong>{component.label} <small>· poids {numberFormat.format(component.weight)} %</small></strong><span>{numberFormat.format(component.value)} / 100</span></div><p>{component.reason}</p></li>)}</ul> : <p className="text-muted">Les données disponibles ne permettent pas d’établir un score.</p>}
       </section>
     </div>
     <section className="panel opportunity-detail-panel"><div className="panel-heading"><div><h2>Contrats</h2><p>Cotations et provenance de chaque jambe</p></div></div>
-      <div className="opportunities-table-scroll"><table className="opportunities-table"><thead><tr>{["Sens", "Contrat", "Strike", "Échéance", "Qté", "Bid", "Ask", "Horodatage", "Source"].map((label) => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{item.input.legs.map((leg, index) => <tr key={leg.id}>
+      <div className="opportunities-table-scroll" tabIndex={0} role="region" aria-label="Tableau des contrats"><table className="opportunities-table"><thead><tr>{["Sens", "Contrat", "Strike", "Échéance", "Qté", "Bid", "Ask", "Horodatage", "Source"].map((label) => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{item.input.legs.map((leg, index) => <tr key={leg.id}>
         <td>{index === 0 ? "Achat" : "Vente"}</td><td><strong>{leg.type === "call" ? "Call" : "Put"}</strong><br /><small className="text-muted">{leg.id}</small></td><td>{usd(leg.strike)}</td><td>{formatDate(leg.expiration, false)}</td><td>{item.input.quantity} × {leg.multiplier}</td><td>{usd(leg.bid)}</td><td>{usd(leg.ask)}</td><td>{formatDate(leg.quoteAt)} (HE)</td><td><SourceLink url={leg.source.url} publisher={leg.source.publisher} isDemo={isDemo} /></td>
       </tr>)}</tbody></table></div>
     </section>
     <div className="opportunity-detail-grid">
-      <section className="panel opportunity-detail-panel"><div className="panel-heading"><div><h2>Scénarios à l’échéance</h2><p>Variations hypothétiques autour de {usd(priceAnchor)}</p></div></div>
+      <section className="panel opportunity-detail-panel"><div className="panel-heading"><div><h2>Scénarios à l’échéance</h2><p>Variations hypothétiques autour {item.price === null ? "du premier prix d’exercice" : "du cours de référence"} de {usd(priceAnchor)}</p></div></div>
         <div className="opportunities-table-scroll"><table className="opportunities-table"><thead><tr><th scope="col">Scénario</th><th scope="col">Cours</th><th scope="col">P&L</th></tr></thead><tbody>{scenarios.map(([move, label]) => {
           const price = Math.round(priceAnchor * (1 + move) * 100) / 100;
           const result = payoffAt(item.input, price);
@@ -303,33 +345,42 @@ function Evidence({ candidate }: { candidate: ResearchCandidate }) {
 }
 
 function SourceLink({ url, publisher, isDemo }: { url: string; publisher: string; isDemo?: boolean }) {
+  if (isDemo && url === "/settings#data-sources") return <Link href={url} className="opportunity-source">{publisher}</Link>;
   return !isDemo && /^https:\/\//i.test(url) ? <a href={url} target="_blank" rel="noreferrer" className="opportunity-source">{publisher} <ExternalLink size={12} /></a> : <span>{publisher}</span>;
 }
 
 function PayoffChart({ item, title }: { item: Opportunity; title: string }) {
+  const fillId = useId();
   const strikes = item.input.legs.map((leg) => leg.strike);
   const bound = item.result.breakEven ?? strikes[0];
   const lower = Math.max(0, Math.min(...strikes, bound) * 0.8);
   const upper = Math.max(...strikes, bound) * 1.2;
   const xValues = [...new Set([...Array.from({ length: 33 }, (_, index) => lower + (upper - lower) / 32 * index), ...strikes, bound])].sort((first, second) => first - second);
   const data = xValues.map((price) => ({ price, pnl: payoffAt(item.input, price) }));
+  const ceiling = Math.max(0, ...data.map((point) => point.pnl));
+  const floor = Math.min(0, ...data.map((point) => point.pnl));
+  const zeroPosition = ceiling === floor ? 0 : ceiling / (ceiling - floor);
   const axis = { fill: "#8589a2", fontSize: 11 };
-  return <div className="opportunity-payoff" role="img" aria-label={title}>
+  return <div className="opportunity-payoff" role="group" aria-label={title}>
     <ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ right: 14, left: 1, bottom: 5, top: 8 }}>
+      <defs><linearGradient id={fillId} x1="0" x2="0" y1="0" y2="1">
+        <stop offset={zeroPosition} stopColor="#48d6a5" stopOpacity={0.31} />
+        <stop offset={zeroPosition} stopColor="#f28097" stopOpacity={0.25} />
+      </linearGradient></defs>
       <CartesianGrid stroke="#292b3d" strokeDasharray="3 5" vertical={false} />
       <XAxis dataKey="price" type="number" domain={[lower, upper]} tickFormatter={(value) => numberFormat.format(value)} tick={axis} tickLine={false} axisLine={false} padding={{ left: 4, right: 4 }} />
-      <YAxis tick={axis} tickFormatter={(value) => `${value}$`} tickLine={false} axisLine={false} width={49} />
+      <YAxis tick={axis} tickFormatter={(value) => `${value}$`} domain={[floor, ceiling]} tickLine={false} axisLine={false} width={49} />
       <ReferenceLine y={0} stroke="#676c88" strokeDasharray="4 4" />
       {strikes.map((strike, index) => <ReferenceLine key={`${strike}-${index}`} x={strike} stroke="#8876b2" strokeDasharray="2 4" />)}
       {item.result.breakEven !== null && <ReferenceLine x={item.result.breakEven} stroke="#4abfa2" strokeDasharray="5 3" />}
       <Tooltip labelFormatter={(value) => `Sous-jacent ${usd(Number(value))}`} formatter={(value) => usd(Number(value))} contentStyle={{ background: "#151827", border: "1px solid #33354e", borderRadius: "9px" }} />
-      <Area type="linear" dataKey="pnl" name="P&L à l’échéance" stroke="#a38afb" strokeWidth={2.5} fill="#a38afb29" baseValue={0} isAnimationActive={false} />
+      <Area type="linear" dataKey="pnl" name="P&L à l’échéance" stroke="#a38afb" strokeWidth={2.5} fill={`url(#${fillId})`} baseValue={0} isAnimationActive={false} />
     </AreaChart></ResponsiveContainer>
   </div>;
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return <div className="panel opportunity-metric"><span>{label}</span><strong className={tone}>{value}</strong></div>;
+function Metric({ label, value, tone, detail }: { label: string; value: string; tone?: string; detail?: React.ReactNode }) {
+  return <div className="panel opportunity-metric"><span>{label}</span><strong className={tone}>{value}</strong>{detail && <small>{detail}</small>}</div>;
 }
 
 function Direction({ value }: { value: ResearchCandidate["direction"] }) {
@@ -337,7 +388,8 @@ function Direction({ value }: { value: ResearchCandidate["direction"] }) {
 }
 
 function Quality({ value }: { value: string }) {
-  return <span className="opportunity-quality" data-tone={value === "DEMO" ? "demo" : value.startsWith("VERIFIED") ? "verified" : "other"}>{statusNames[value] ?? value}</span>;
+  const tone = value === "DEMO" ? "demo" : value === "MANUAL_ATTESTED" ? "manual" : value === "VERIFIED_FRESH" || value === "VERIFIED_DELAYED" ? "verified" : "other";
+  return <span className="opportunity-quality" data-tone={tone}>{statusNames[value] ?? value}</span>;
 }
 
 function SymbolMark({ symbol }: { symbol: string }) {

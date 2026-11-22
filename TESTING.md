@@ -28,10 +28,11 @@ Set `OPTIONS_TEST_CHROMIUM` to an installed Chromium executable if you need to u
 
 ## Recorded local checks
 
-- `npm test` passed 56 tests covering quantitative calculations, paper accounting, storage and auth, mocked research, durable jobs, cost reservations, and market-time scheduling.
-- The production Next.js build, TypeScript, and ESLint passed. Chromium Playwright passed 13 tests against the production demo server, including five API regressions, desktop navigation without console errors, mobile navigation, bookmarked research, scan history, calculator, settings, watchlists, paper exits, analytics, and demo chat.
-- The production dependency audit found zero known vulnerabilities.
-- The three SQL migrations ran on local PostgreSQL via PGlite. The check exercised state revisions, normalized projections, row ownership, restricted writes, and evidence cleanup.
+- `npm test` passed 89 tests. The production Next.js build, TypeScript, and ESLint passed.
+- Chromium Playwright passed 23 tests against the final production build.
+- The npm dependency audit found zero known vulnerabilities.
+- All four migrations passed on local PostgreSQL 17. Local GoTrue and PostgREST checks exercised authentication, application storage, owner isolation, and revocation.
+- See [Production-readiness audit](AUDIT_REPORT.md) for the fixes and verification boundaries.
 
 The retained database regression is `supabase/tests/workspace_rls.sql`. With the Supabase CLI and Docker, start a local Supabase stack with `supabase start`, then run `supabase test db`. That CLI path requires the local service stack and remains to be exercised here.
 

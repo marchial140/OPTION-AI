@@ -7,8 +7,8 @@ import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Too
 import { strategyLabels } from "@/lib/quant";
 import type { Strategy } from "@/lib/quant";
 import type { AppState } from "@/lib/workspace";
-import { prefilledOpportunity, queryParameter } from "./strategy-lab";
-import { actionForm, Empty, errorMessage, Field, Heading, money, Notice, number, Panel, request, shortDate, Stat, Submit } from "./ui";
+import { prefilledOpportunity } from "./strategy-lab";
+import { actionForm, Empty, errorMessage, Field, Heading, money, Notice, number, Panel, request, shortDate, SourceLink, Stat, Submit, timestamp } from "./ui";
 
 type Aggregate = { label: string; count: number; value: number };
 
@@ -30,22 +30,23 @@ export function AnalyticsPage({ state }: { state: AppState }) {
   const flat = analytics.completedTrades - stats.wins - stats.losses;
   const distribution = [["Gains", stats.wins, "#41d5a1"], ["Pertes", stats.losses, "#f17791"], ["Équilibre", flat, "#a38afb"]] as const;
   return <>
-    <Heading icon={BarChart3} title="Analyse de performance" detail="Évaluez les résultats réalisés de vos simulations et retrouvez vos notes de recherche."
+    <Heading icon={BarChart3} title="Analyse de performance" detail="Analysez les sorties enregistrées et retrouvez les notes associées à vos simulations."
       actions={<Link href="/portfolio" className="wp-button">Voir le portefeuille</Link>} />
-    {state.mode === "demo" && <Notice>Démo · Les transactions illustrent le fonctionnement du suivi.</Notice>}
+    {state.mode === "demo" && <Notice>Démo · Les statistiques incluent les exemples fictifs et les positions simulées de cet espace.</Notice>}
     <div className="wp-stat-grid">
       <Stat label="P&L net réalisé" value={money(analytics.realizedPnl)} tone={analytics.realizedPnl < 0 ? "wp-bad" : "wp-good"} />
       <Stat label="Positions clôturées" value={analytics.completedTrades} />
-      <Stat label="Taux de gains observé" value={analytics.winRate === null ? "—" : number(analytics.winRate) + " %"} />
-      <Stat label="Ratio gains / pertes" value={number(stats.profitFactor)} />
+      <Stat label="Taux de gains observé" value={analytics.winRate === null ? "—" : number(analytics.winRate) + " %"}
+        hint={analytics.completedTrades > 0 ? `${stats.wins} sur ${analytics.completedTrades} positions clôturées` : "Aucune position clôturée"} />
+      <Stat label="Ratio gains / pertes" value={number(stats.profitFactor)} hint={stats.profitFactor === null ? "Aucune perte nette clôturée" : "Gains cumulés / pertes absolues"} />
       <Stat label="Gain moyen" value={money(stats.averageWin)} />
       <Stat label="Perte moyenne" value={money(stats.averageLoss)} />
       <Stat label="Frais totaux" value={money(stats.totalFees)} />
       <Stat label="Durée moyenne" value={stats.averageHoldDays === null ? "—" : number(stats.averageHoldDays) + " j"} />
-      <Stat label="Repli maximal réalisé" value={money(stats.maxDrawdown)} />
+      <Stat label="Repli maximal réalisé" value={money(stats.maxDrawdown)} hint="Sur les soldes réalisés de fin de journée" />
     </div>
     <div className="wp-grid wp-grid-even">
-      <Panel title="P&L réalisé cumulé" detail="Somme des résultats nets, indexée par date de sortie.">
+      <Panel title="P&L réalisé cumulé" detail="Somme des résultats nets des sorties totales et partielles, par date.">
         {analytics.equity.length ? <>
           <div className="wp-chart" role="img" aria-label="Évolution du résultat net réalisé">
             <ResponsiveContainer width="100%" height="100%" minWidth={1}>
@@ -102,7 +103,7 @@ export function AnalyticsPage({ state }: { state: AppState }) {
 }
 
 type Source = { url: string; publisher?: string; title?: string; retrievedAt?: string };
-type Message = { role: "user" | "assistant"; content: string; sources?: Source[] };
+type Message = { role: "user" | "assistant"; content: string; sources?: Source[]; notice?: string };
 
 const suggestions = [
   "Pourquoi cette stratégie est-elle classée première ?",
@@ -111,36 +112,36 @@ const suggestions = [
   "Quels résultats respectent une perte maximale de 50 USD ?",
 ];
 
-export function AssistantPage({ state }: { state: AppState }) {
-  const prefilled = prefilledOpportunity(state);
+export function AssistantPage({ state, opportunityId }: { state: AppState; opportunityId?: string }) {
+  const prefilled = prefilledOpportunity(state, opportunityId);
   const selectable = state.opportunities.slice(0, 24);
   if (prefilled && !selectable.some((item) => item.id === prefilled.id)) selectable.push(prefilled);
-  const [selected, setSelected] = useState(() => prefilled?.id ?? queryParameter("opportunity") ?? "");
+  const [selected, setSelected] = useState(prefilled?.id ?? "");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const thread = useRef<HTMLDivElement>(null);
-  const ready = state.mode === "demo" || state.research.configured;
   useEffect(() => {
     if (thread.current) thread.current.scrollTop = thread.current.scrollHeight;
   }, [messages.length, pending]);
 
   const send = async (value: string) => {
     const message = value.trim();
-    if (!message || pending || !ready) return;
+    if (!message || pending) return;
     setPending(true);
     setError("");
     setPrompt("");
     setMessages([...messages, { role: "user", content: message }]);
     try {
-      const reply = await request<{ answer: string; sources?: Source[] }>("/api/ai/chat", "POST", {
+      const reply = await request<{ answer: string; sources?: Source[]; error?: string }>("/api/ai/chat", "POST", {
         message,
         opportunityId: selected || undefined,
         history: messages.slice(-6).map(({ role, content }) => ({ role, text: content.slice(0, 2000) })),
       });
-      setMessages((previous) => [...previous, { role: "assistant", content: reply.answer, sources: reply.sources }]);
+      setMessages((previous) => [...previous, { role: "assistant", content: reply.answer, sources: reply.sources, notice: reply.error }]);
     } catch (failure) {
+      setMessages(messages);
       setError(errorMessage(failure));
       setPrompt(message);
     } finally {
@@ -157,28 +158,30 @@ export function AssistantPage({ state }: { state: AppState }) {
           <option value="">Dernier contexte enregistré</option>
           {selectable.map((opportunity) => <option key={opportunity.id} value={opportunity.id}>{opportunity.symbol} · {strategyLabels[opportunity.strategy]}</option>)}
         </select></Field>
+        {opportunityId && !prefilled && <Notice type="error">Le dossier lié est introuvable. Vous pouvez interroger le dernier contexte enregistré.</Notice>}
         <p className="wp-micro">Questions suggérées</p>
-        {suggestions.map((suggestion) => <button type="button" className="wp-button" key={suggestion} disabled={pending || !ready} onClick={() => { setPrompt(suggestion); }}>{suggestion}</button>)}
+        {suggestions.map((suggestion) => <button type="button" className="wp-button" key={suggestion} disabled={pending} onClick={() => { setPrompt(suggestion); }}>{suggestion}</button>)}
         <Notice>{state.mode === "demo" ? "Démo · Assistant local fondé sur les exemples fictifs et les calculs du moteur." :
-          ready ? "L’assistant s’appuie sur les recherches enregistrées et les calculs de la plateforme." :
-            "Connectez OpenAI sur le serveur pour activer la conversation."}</Notice>
+          state.research.configured ? "L’assistant s’appuie sur les recherches enregistrées et les calculs de la plateforme." :
+            "Mode local · Les réponses s’appuient sur les dossiers enregistrés et les calculs du moteur. Configurez OpenAI pour activer la synthèse."}</Notice>
       </Panel>
       <Panel title="Conversation" detail="Les réponses sont rédigées en français.">
         <div className="wp-chat-thread" ref={thread} role="log" aria-label="Conversation de recherche">
           {!messages.length && <Empty title="Posez une question de recherche" detail="Essayez une question proposée ou demandez le détail d’une stratégie." />}
           {messages.map((entry, index) => <div className={`wp-chat-message${entry.role === "user" ? " wp-chat-user" : ""}`} key={index}>
             <strong>{entry.role === "user" ? "Vous" : "Assistant"}</strong><p>{entry.content}</p>
+            {entry.notice && <Notice>{entry.notice} La réponse ci-dessus provient du contexte local.</Notice>}
             {!!entry.sources?.length && <ul className="wp-sources">{entry.sources.map((source, sourceIndex) => <li key={sourceIndex}>
-              {source.url.startsWith("https://") && !source.url.includes(".invalid") ?
-                <a href={source.url} target="_blank" rel="noreferrer">{source.publisher ?? source.title ?? source.url}</a> : source.publisher ?? source.title ?? "Source interne"}
+              <SourceLink url={source.url}>{source.publisher ?? source.title ?? "Source de recherche"}</SourceLink>
+              {source.retrievedAt && ` · Consultée le ${timestamp(source.retrievedAt)}`}
             </li>)}</ul>}
           </div>)}
           {pending && <p className="wp-micro" role="status">Préparation de la réponse…</p>}
         </div>
         {error && <Notice type="error">{error}</Notice>}
         <form className="wp-form" onSubmit={actionForm(() => void send(prompt))}>
-          <Field label="Votre question"><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Que souhaitez-vous analyser ?" rows={3} maxLength={1500} required disabled={!ready || pending} /></Field>
-          <div className="wp-actions"><Submit pending={pending} disabled={!ready || !prompt.trim()}><Send size={15} /> Envoyer</Submit></div>
+          <Field label="Votre question"><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Que souhaitez-vous analyser ?" rows={3} maxLength={1500} required disabled={pending} /></Field>
+          <div className="wp-actions"><Submit pending={pending} disabled={!prompt.trim()}><Send size={15} /> Envoyer</Submit></div>
         </form>
       </Panel>
     </div>

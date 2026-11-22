@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FlaskConical, Plus, RotateCcw, X } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { calculateStrategy, makeOccSymbol, payoffAt, strategyLabels } from "@/lib/quant";
+import { calculateStrategy, makeOccSymbol, optionTradingCutoff, payoffAt, strategyLabels } from "@/lib/quant";
 import type { ContractQuote, Strategy, StrategyInput } from "@/lib/quant";
 import type { AppState } from "@/lib/workspace";
-import { dayInput, Field, Heading, money, Notice, number, Panel, Stat } from "./ui";
+import { dayInput, Empty, Field, Heading, money, Notice, number, Panel, Stat } from "./ui";
 
 export interface ManualParameters {
   symbol: string;
@@ -24,22 +24,41 @@ export interface ManualParameters {
 export const strategyKeys = Object.keys(strategyLabels) as Strategy[];
 export const isVertical = (strategy: Strategy) => strategy === "bull_call" || strategy === "bear_put";
 
-export function queryParameter(name: string) {
-  return typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get(name);
-}
-
-export function prefilledOpportunity(state: AppState) {
-  const id = queryParameter("opportunity");
+export function prefilledOpportunity(state: AppState, id?: string) {
   if (!id) return undefined;
   return state.opportunities.find((item) => item.id === id) ??
     state.scans.flatMap((scan) => scan.opportunities).find((item) => item.id === id);
 }
 
-export function defaults(): ManualParameters {
+function demoExpiration(minDte: number, maxDte: number) {
+  const now = Date.now();
+  const anchor = Math.min(maxDte, Math.max(minDte, 21));
+  const limit = Math.max(maxDte - anchor, anchor - minDte);
+  for (let offset = 0; offset <= limit; offset++) {
+    for (const dte of offset === 0 ? [anchor] : [anchor + offset, anchor - offset]) {
+      if (dte < minDte || dte > maxDte) continue;
+      const date = dayInput(new Date(now + dte * 86400000));
+      const cutoff = optionTradingCutoff(date);
+      if (cutoff !== null && cutoff > now) return date;
+    }
+  }
+  return "";
+}
+
+export function defaults(demo: boolean, minDte = 7, maxDte = 30): ManualParameters {
   return {
-    symbol: "SPY", strategy: "bull_call", expiration: dayInput(new Date(Date.now() + 21 * 86400000)),
-    longStrike: "100", shortStrike: "105", longPremium: "3.20", shortPremium: "1.40", quantity: "1", fees: "0",
+    symbol: demo ? "SPY" : "", strategy: "bull_call",
+    expiration: demo ? demoExpiration(minDte, maxDte) : "",
+    longStrike: demo ? "100" : "", shortStrike: demo ? "105" : "",
+    longPremium: demo ? "3.20" : "", shortPremium: demo ? "1.40" : "", quantity: "1", fees: "0",
   };
+}
+
+function complete(config: ManualParameters) {
+  const { symbol, expiration, longStrike, longPremium, quantity, fees, shortStrike, shortPremium, strategy } = config;
+  const required = [symbol, expiration, longStrike, longPremium, quantity, fees];
+  if (isVertical(strategy)) required.push(shortStrike, shortPremium);
+  return required.every((value) => value.trim());
 }
 
 function manualNumber(text: string) {
@@ -52,6 +71,7 @@ export function manualInput(config: ManualParameters): StrategyInput {
   if (!/^\d{4}-\d\d-\d\d$/.test(config.expiration) || !Number.isFinite(Date.parse(config.expiration))) {
     throw new Error("Indiquez une date d’échéance valide.");
   }
+  if (optionTradingCutoff(config.expiration) === null) throw new Error("L’échéance doit tomber un jour de séance d’options.");
   const type = config.strategy === "long_call" || config.strategy === "bull_call" ? "call" : "put";
   const now = new Date().toISOString();
   const quote = (strike: number, premium: number): ContractQuote => {
@@ -70,7 +90,7 @@ export function manualInput(config: ManualParameters): StrategyInput {
       currency: "USD",
       quoteAt: now,
       retrievedAt: now,
-      source: { url: "https://example.invalid/manual-entry", publisher: "Saisie manuelle" },
+      source: { url: "/strategy-lab", publisher: "Saisie de simulation", method: "manual-simulation" },
       status: "UNVERIFIED",
     };
   };
@@ -106,18 +126,18 @@ export function ContractFields({ config, onChange, id, allowPast }: {
       const longStrike = Number(config.longStrike);
       const shortStrike = Number(config.shortStrike);
       let nextShort = config.shortStrike;
-      if (strategy === "bear_put" && shortStrike >= longStrike) nextShort = String(Math.max(0.01, longStrike - 5));
-      if (strategy === "bull_call" && shortStrike <= longStrike) nextShort = String(longStrike + 5);
+      if (config.longStrike && config.shortStrike && strategy === "bear_put" && shortStrike >= longStrike) nextShort = String(Math.max(0.001, longStrike - 5));
+      if (config.longStrike && config.shortStrike && strategy === "bull_call" && shortStrike <= longStrike) nextShort = String(longStrike + 5);
       onChange({ ...config, strategy, shortStrike: nextShort });
     }}>
       {strategyKeys.map((strategy) => <option value={strategy} key={strategy}>{strategyLabels[strategy]}</option>)}
     </select></Field>
     <Field label="Échéance"><input type="date" value={config.expiration} name={id + "-expiration"} min={allowPast ? undefined : dayInput()} onChange={(event) => set("expiration", event.target.value)} required /></Field>
     <Field label="Contrats"><input type="number" min="1" max="1000" value={config.quantity} name={id + "-quantity"} onChange={(event) => set("quantity", event.target.value)} required /></Field>
-    <Field label="Exercice acheté"><input type="number" min=".01" step=".001" value={config.longStrike} name={id + "-long-strike"} onChange={(event) => set("longStrike", event.target.value)} required /></Field>
+    <Field label="Exercice acheté"><input type="number" min=".001" step=".001" value={config.longStrike} name={id + "-long-strike"} onChange={(event) => set("longStrike", event.target.value)} required /></Field>
     <Field label="Prime achetée par action"><input type="number" min="0" step=".001" value={config.longPremium} name={id + "-long-premium"} onChange={(event) => set("longPremium", event.target.value)} required /></Field>
     {vertical && <>
-      <Field label="Exercice vendu"><input type="number" min=".01" step=".001" value={config.shortStrike} name={id + "-short-strike"} onChange={(event) => set("shortStrike", event.target.value)} required /></Field>
+      <Field label="Exercice vendu"><input type="number" min=".001" step=".001" value={config.shortStrike} name={id + "-short-strike"} onChange={(event) => set("shortStrike", event.target.value)} required /></Field>
       <Field label="Prime vendue par action"><input type="number" min="0" step=".001" value={config.shortPremium} name={id + "-short-premium"} onChange={(event) => set("shortPremium", event.target.value)} required /></Field>
     </>}
     <Field label="Frais totaux en USD"><input type="number" min="0" step=".01" value={config.fees} name={id + "-fees"} onChange={(event) => set("fees", event.target.value)} required /></Field>
@@ -126,13 +146,15 @@ export function ContractFields({ config, onChange, id, allowPast }: {
 
 const colors = ["#a68afa", "#48d5b2", "#efbd76"];
 
-export function StrategyLab({ state }: { state: AppState }) {
-  const opportunity = prefilledOpportunity(state);
-  const [config, setConfig] = useState<ManualParameters>(() => opportunity ? fromInput(opportunity.input) : defaults());
+export function StrategyLab({ state, opportunityId }: { state: AppState; opportunityId?: string }) {
+  const opportunity = prefilledOpportunity(state, opportunityId);
+  const demoExample = state.mode === "demo" && !opportunity;
+  const [config, setConfig] = useState<ManualParameters>(() => opportunity ? fromInput(opportunity.input) : defaults(demoExample));
   const [saved, setSaved] = useState<StrategyInput[]>([]);
-  const [price, setPrice] = useState(() => Number(config.longStrike));
+  const [price, setPrice] = useState(() => opportunity?.price ?? (Number(config.longStrike) || null));
   const [showScenarios, setShowScenarios] = useState(false);
   const computed = useMemo(() => {
+    if (!complete(config)) return {};
     try {
       const input = manualInput(config);
       return { input, result: calculateStrategy(input) };
@@ -162,11 +184,11 @@ export function StrategyLab({ state }: { state: AppState }) {
       strikes: Array.from(new Set(input?.legs.map((leg) => leg.strike) ?? [])),
     };
   }, [active, input]);
-  const scenarioPrice = Math.max(graph.min, Math.min(graph.max, price));
+  const scenarioPrice = Math.max(graph.min, Math.min(graph.max, price ?? (Number(config.longStrike) || graph.min)));
   const reset = () => {
-    const original = opportunity ? fromInput(opportunity.input) : defaults();
+    const original = opportunity ? fromInput(opportunity.input) : defaults(demoExample);
     setConfig(original);
-    setPrice(Number(original.longStrike));
+    setPrice(opportunity?.price ?? (Number(original.longStrike) || null));
     setSaved([]);
     setShowScenarios(false);
   };
@@ -177,7 +199,8 @@ export function StrategyLab({ state }: { state: AppState }) {
       actions={<button type="button" className="wp-button" onClick={reset}><RotateCcw size={15} /> Réinitialiser</button>} />
     <div className="wp-grid">
       <Panel title="Paramètres de la stratégie" detail="Montants en USD · 100 actions par contrat">
-        <Notice>Mode saisie manuelle. Les primes saisies sont des hypothèses de simulation.</Notice>
+        <Notice>Les entrées du laboratoire sont des hypothèses de simulation. {demoExample ? "Les valeurs de départ sont fictives." : opportunity ? "Valeurs préremplies depuis le dossier de recherche sélectionné." : "Saisissez vos propres primes et prix d’exercice."}</Notice>
+        {opportunityId && !opportunity && <Notice type="error">Le dossier lié est introuvable. Vous pouvez construire une simulation manuelle.</Notice>}
         <ContractFields config={config} onChange={setConfig} id="lab" />
         {computed.error && <Notice type="error">{computed.error}</Notice>}
         {isVertical(config.strategy) && <p className="wp-micro">Le risque à l’échéance suppose que les deux jambes restent en place. Une assignation anticipée ou le traitement de l’exercice peut modifier l’exposition.</p>}
@@ -202,6 +225,7 @@ export function StrategyLab({ state }: { state: AppState }) {
             <Stat label="Capital requis" value={money(result?.positionCost)} />
             <Stat label="Rendement / risque" value={result && result.rewardRisk !== null ? number(result.rewardRisk) + "×" : "—"} />
           </div>
+          {!graph.rows.length && <Empty title="Profil indisponible" detail="Renseignez un sous-jacent, une échéance et les primes de chaque jambe pour calculer le profil." />}
           {graph.rows.length > 0 && <><div className="wp-chart" role="img" aria-label="Gain ou perte à l’échéance en fonction du cours du sous-jacent">
             <ResponsiveContainer width="100%" height="100%" minWidth={1}>
               <LineChart data={graph.rows} margin={{ left: 8, right: 14, top: 10, bottom: 4 }}>

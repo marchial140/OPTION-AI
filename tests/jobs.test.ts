@@ -70,3 +70,58 @@ describe('durable scanner jobs', () => {
     expect((await readWorkspace(identity)).reservations).toEqual([]);
   });
 });
+
+describe('research authorization across interrupted requests', () => {
+  it('keeps expired reservations in the budget and reconciles a late provider response once', async () => {
+    await mutateWorkspace(identity,(state)=>{ state.settings.dailyBudget = 0.1; });
+    const interrupted = budgetHooks(identity,'chat');
+    const next = budgetHooks(identity,'chat');
+    await expect(interrupted.allowRequest({estimatedCost:0.08,requestType:'chat'})).resolves.toBe(true);
+    await mutateWorkspace(identity,(state)=>{
+      state.reservations[0].expiresAt = new Date(Date.now() - 2000).toISOString();
+    });
+    await expect(next.allowRequest({estimatedCost:0.03,requestType:'chat'})).resolves.toBe(false);
+    const unsettled = await readWorkspace(identity);
+    expect(unsettled.usage).toHaveLength(1);
+    expect(unsettled.usage[0]).toMatchObject({estimatedCost:0,unreconciledCost:0.08,usageAvailable:false});
+    await interrupted.recordUsage({model:'test',requestType:'chat',estimatedCost:0.01,inputTokens:12,outputTokens:3,searchUsage:0,createdAt:new Date().toISOString()});
+    const settled = await readWorkspace(identity);
+    expect(settled.usage).toHaveLength(1);
+    expect(settled.usage[0]).toMatchObject({estimatedCost:0.01});
+    expect(settled.usage[0].unreconciledCost).toBeUndefined();
+    await expect(next.allowRequest({estimatedCost:0.03,requestType:'chat'})).resolves.toBe(true);
+    await next.release();
+    expect((await readWorkspace(identity)).usage.at(-1)?.unreconciledCost).toBe(0.03);
+  });
+
+  it('fails closed for a malformed deployment spend limit', async () => {
+    vi.stubEnv('AI_DAILY_BUDGET_USD', 'zero USD');
+    await expect(budgetHooks(identity,'chat').allowRequest({estimatedCost:0.02,requestType:'chat'})).resolves.toBe(false);
+    expect((await readWorkspace(identity)).reservations).toHaveLength(0);
+  });
+
+  it('rejects authorization when a scan worker is using an expired lease', async () => {
+    const scan = await mutateWorkspace(identity, (state) => {
+      const scan = queueScan(state,identity,{type:'quick',tickers:['NVDA']});
+      scan.lease = {id:'old-worker',expiresAt:new Date(Date.now()-1000).toISOString()};
+      scan.status = 'running';
+      return scan;
+    });
+    await expect(budgetHooks(identity,'scan',scan.id,'old-worker').allowRequest({estimatedCost:0.01,requestType:'screen'})).resolves.toBe(false);
+    expect((await readWorkspace(identity)).scans[0].requestCount).toBe(0);
+  });
+
+  it('rejects a reused scan key with a different payload', async () => {
+    await mutateWorkspace(identity,(state)=>queueScan(state,identity,{type:'quick',tickers:['NVDA']},'same-key'));
+    await expect(mutateWorkspace(identity,(state)=>queueScan(state,identity,{type:'quick',tickers:['AMD']},'same-key')))
+      .rejects.toMatchObject({status:409,code:'idempotency_conflict'});
+  });
+});
+
+it('releases a disconnected browser lease without discarding pending work', async () => {
+  const scan = await mutateWorkspace(identity,(state)=>queueScan(state,identity,{type:'quick',tickers:['NVDA']}));
+  await expect(advanceScan(identity,scan.id,AbortSignal.abort())).resolves.toMatchObject({
+    status:'running',completed:[],failed:[],
+  });
+  await expect(advanceScan(identity,scan.id)).resolves.toMatchObject({status:'completed',completed:['NVDA']});
+});

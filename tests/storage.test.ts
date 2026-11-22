@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyIdentityCookie, authenticate, getIdentity, startDemo } from '../src/lib/server/auth'
+import { applyIdentityCookie, authenticate, getIdentity, logout, startDemo } from '../src/lib/server/auth'
 import { listScheduledIdentities, mutateWorkspace, readWorkspace } from '../src/lib/server/store'
 import { emptyWorkspace } from '../src/lib/workspace'
 
@@ -65,10 +65,26 @@ describe('local demo persistence', () => {
     expect((await readWorkspace(right)).watchlists.some((list) => list.id.startsWith('test-'))).toBe(false)
   })
 
+  it('reclaims a lock from a stopped process while preserving concurrent updates', async () => {
+    const identity = await getIdentity(withCookies(demoUrl))
+    await readWorkspace(identity)
+    const lock = join(directory, 'demo', `${identity.userId}.json.lock`)
+    await mkdir(lock)
+    await writeFile(join(lock, '2147483647-aa38e3a7-9a62-463d-b9b3-e88831cb3b7a'), '')
+    await Promise.all(Array.from({ length: 8 }, () =>
+      mutateWorkspace(identity, (draft) => { draft.settings.accountCapital += 1 }),
+    ))
+    expect((await readWorkspace(identity)).settings.accountCapital).toBe(emptyWorkspace('demo').settings.accountCapital + 8)
+  })
+
   it('returns only durable workspaces that need scheduled processing', async () => {
     const idle = await getIdentity(withCookies(demoUrl))
     const scheduled = await getIdentity(withCookies(demoUrl))
+    const broken = await getIdentity(withCookies(demoUrl))
     await readWorkspace(idle)
+    await readWorkspace(broken)
+    await writeFile(join(directory, 'demo', `${broken.userId}.json`), '{}')
+    await expect(readWorkspace(broken)).rejects.toMatchObject({ code: 'STORAGE_UNAVAILABLE' })
     await mutateWorkspace(scheduled, (draft) => { draft.settings.schedule.enabled = true })
     expect((await listScheduledIdentities()).map((identity) => identity.userId)).toEqual([scheduled.userId])
   })
@@ -85,11 +101,19 @@ describe('Supabase integration boundary', () => {
     expect(restored).toMatchObject({ userId: identity.userId, mode: 'demo' })
   })
 
+  it('ignores legacy cookies on HTTPS and uses the host-only namespace', async () => {
+    configureSupabase()
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(getIdentity(withCookies(liveUrl, 'options_ai_access=legacy-token'))).rejects.toMatchObject({ code: 'AUTH_REQUIRED' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('validates an access JWT via Supabase before trusting its owner', async () => {
     configureSupabase()
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ id: userId, email: 'user@example.org' }))
     vi.stubGlobal('fetch', fetchMock)
-    const identity = await getIdentity(withCookies(liveUrl, 'options_ai_access=verified-access-token'))
+    const identity = await getIdentity(withCookies(liveUrl, '__Host-options_ai_access=verified-access-token'))
     expect(identity).toMatchObject({ mode: 'live', userId })
     expect(fetchMock).toHaveBeenCalledWith('https://workspace.example.org/auth/v1/user', expect.objectContaining({
       headers: expect.objectContaining({ Authorization: 'Bearer verified-access-token' }),
@@ -104,9 +128,22 @@ describe('Supabase integration boundary', () => {
     const result = await authenticate(withCookies(liveUrl), { email: 'user@example.org', password: 'sample-pass', action: 'login' })
     const response = await applyIdentityCookie(new Response(), result.identity!)
     expect(response.headers.getSetCookie()).toEqual([
-      expect.stringMatching(/options_ai_access=real-token; .*HttpOnly.*Max-Age=1800.*Secure/u),
-      expect.stringMatching(/options_ai_refresh=refresh-secret; .*HttpOnly.*Secure/u),
+      expect.stringMatching(/^__Host-options_ai_access=real-token; .*HttpOnly.*Max-Age=1800.*Secure/u),
+      expect.stringMatching(/^__Host-options_ai_refresh=refresh-secret; .*HttpOnly.*Secure/u),
     ])
+  })
+
+  it('revokes the hosted live session even after its access cookie expires', async () => {
+    configureSupabase()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ access_token: 'reissued-token', refresh_token: 'new-refresh', expires_in: 300, user: { id: userId } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await logout(withCookies(liveUrl, '__Host-options_ai_refresh=refresh-secret'))
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://workspace.example.org/auth/v1/token?grant_type=refresh_token',
+      expect.objectContaining({ body: '{"refresh_token":"refresh-secret"}' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://workspace.example.org/auth/v1/logout?scope=local',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer reissued-token' }) }))
   })
 
   it('starts email confirmation without returning browser tokens', async () => {
@@ -156,7 +193,11 @@ describe('Supabase integration boundary', () => {
       draft.settings.accountCapital += 100
       return draft.settings.accountCapital
     })
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
+      apikey: 'publishable', Authorization: 'Bearer verified-access-token',
+    })
     const [, options] = fetchMock.mock.calls[3]
+    expect(options.headers).toMatchObject({ apikey: 'server-credential', Authorization: 'Bearer server-credential' })
     expect(JSON.parse(options.body)).toMatchObject({
       p_owner: userId, p_demo: false, p_revision: 5, p_value: { settings: { accountCapital: 20_100 } },
     })

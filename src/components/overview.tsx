@@ -14,14 +14,14 @@ const chartColors = ["#9b7ef8", "#684dd6", "#5a8ae8", "#3abeb0"];
 const axisFont = { fill: "#8589a2", fontSize: 11 };
 const tooltipStyle = { background: "#17192a", color: "#f3f1fb", border: "1px solid #34354b", borderRadius: "10px", boxShadow: "0 4px 22px #08091080" };
 const prices = new Intl.NumberFormat("fr-CA", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const numbers = new Intl.NumberFormat("fr-CA", { maximumFractionDigits: 1 });
+const numbers = new Intl.NumberFormat("fr-CA", { maximumFractionDigits: 2 });
+const marketDate = new Intl.DateTimeFormat("fr-CA", { day: "numeric", month: "short", timeZone: "America/New_York" });
+const scanStatuses = { queued: "Planifié", running: "En cours", completed: "Terminé", partial: "Partiel", failed: "Échec", cancelled: "Annulé" };
 
 export function Overview({ state }: { state: AppState }) {
-  const lastScan = state.scans.find((scan) => scan.completedAt);
-  const latestQuote = state.opportunities.reduce((latest, opportunity) => {
-    for (const leg of opportunity.input.legs) if (leg.quoteAt > latest) latest = leg.quoteAt;
-    return latest;
-  }, "");
+  const lastScan = state.scans[0];
+  const latestQuote = [...state.opportunities.flatMap((opportunity) => opportunity.input.legs.map((leg) => leg.quoteAt)), ...state.marketSeries.quotes.flatMap((quote) => quote.quoteAt ?? [])]
+    .reduce((latest, stamp) => Date.parse(stamp) > Date.parse(latest || "1970-01-01") ? stamp : latest, "");
   const trend = state.marketSeries.trend;
   const distribution = (Object.keys(strategyLabels) as Strategy[]).flatMap((strategy, index) => {
     const count = state.opportunities.filter((item) => item.strategy === strategy).length;
@@ -31,9 +31,11 @@ export function Overview({ state }: { state: AppState }) {
   const cost = state.cost.monthly;
   const hasRealized = state.analytics.equity.length > 0;
   const isDemo = state.mode === "demo";
-  const validCount = state.opportunities.filter((item) => item.status.startsWith("VERIFIED")).length;
-  const sampleCount = isDemo ? state.opportunities.length : validCount;
-  const scanTrend = trend.map((point) => ({ ...point, label: dateLabel(point.date, false) }));
+  const verifiedCount = state.opportunities.filter((item) => item.status === "VERIFIED_FRESH" || item.status === "VERIFIED_DELAYED").length;
+  const manualCount = state.opportunities.filter((item) => item.status === "MANUAL_ATTESTED").length;
+  const displayedCount = isDemo ? state.opportunities.length : verifiedCount + manualCount;
+  const scanTrend = trend.map((point) => ({ ...point, timestamp: Date.parse(point.date) }));
+  const trendTicks = scanTrend.length <= 7 ? scanTrend.map((point) => point.timestamp) : undefined;
   const directions = [
     { id: "bullish", name: "Haussier", color: "#41d5a1" },
     { id: "bearish", name: "Baissier", color: "#f17791" },
@@ -52,6 +54,7 @@ export function Overview({ state }: { state: AppState }) {
           <div><strong>{quote.symbol}</strong><span>{quote.price === null ? "—" : prices.format(quote.price)}</span></div>
           <div className="overview-quote-trend">
             {series && <Sparkline values={series} positive={positive} />}
+            {!isDemo && quote.quoteAt && <time dateTime={quote.quoteAt} className="overview-quote-time">{marketDate.format(new Date(quote.quoteAt))} · HE</time>}
             <span className={quote.change === null ? "text-muted" : positive ? "text-positive" : "text-negative"}>
               {quote.change === null ? "—" : `${positive ? "+" : ""}${numbers.format(quote.change)} %`}
             </span>
@@ -80,7 +83,7 @@ export function Overview({ state }: { state: AppState }) {
 
     <div className="overview-kpis">
       <Kpi icon={<Radar size={17} />} tone="accent" label="Candidats de recherche" value={String(state.candidates.length)} detail="Sous-jacents documentés" href="/opportunities?view=research" />
-      <Kpi icon={<ShieldCheck size={17} />} tone="blue" label={isDemo ? "Stratégies de démonstration" : "Opportunités vérifiées"} value={String(sampleCount)} detail={isDemo ? "Calculées à partir des cotations fictives" : "Contrats et cotations validés"} href="/opportunities" />
+      <Kpi icon={<ShieldCheck size={17} />} tone="blue" label={isDemo ? "Stratégies de démonstration" : manualCount ? "Opportunités admissibles" : "Opportunités vérifiées"} value={String(displayedCount)} detail={isDemo ? "Calculées à partir des cotations fictives" : manualCount ? `${verifiedCount} vérifiées · ${manualCount} sur saisie courtier attestée` : "Contrats et cotations validés"} href="/opportunities" />
       <Kpi icon={<Layers3 size={17} />} tone="cyan" label="Symboles suivis" value={String(watchCount)} detail={`${state.watchlists.length} liste${state.watchlists.length !== 1 ? "s" : ""} de suivi`} href="/watchlist" />
       <Kpi icon={<CircleDollarSign size={17} />} tone="green" label="P&L réalisé · papier" value={hasRealized ? signedPrice(state.analytics.realizedPnl) : "—"} valueTone={hasRealized ? (state.analytics.realizedPnl >= 0 ? "text-positive" : "text-negative") : undefined} detail={state.analytics.completedTrades > 0 ? `${state.analytics.completedTrades} position${state.analytics.completedTrades !== 1 ? "s" : ""} clôturée${state.analytics.completedTrades !== 1 ? "s" : ""}` : hasRealized ? "Sorties partielles enregistrées" : "Aucune position clôturée"} href="/portfolio" />
     </div>
@@ -98,11 +101,11 @@ export function Overview({ state }: { state: AppState }) {
                 <linearGradient id="overview-trend-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#9972f7" stopOpacity={0.39} /><stop offset="100%" stopColor="#9972f7" stopOpacity={0.02} /></linearGradient>
               </defs>
               <CartesianGrid vertical={false} stroke="#26283c" strokeDasharray="4 5" />
-              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={axisFont} tickMargin={11} minTickGap={14} />
+              <XAxis dataKey="timestamp" type="number" scale="time" domain={["dataMin", "dataMax"]} ticks={trendTicks} tickFormatter={trendDate} axisLine={false} tickLine={false} tick={axisFont} tickMargin={11} minTickGap={14} />
               <YAxis axisLine={false} tickLine={false} tick={axisFont} allowDecimals={false} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#c1b4ff", marginBottom: 5 }} />
-              <Area isAnimationActive={false} type="monotone" name="Candidats" dataKey="value" stroke="#a084ff" strokeWidth={2.5} fill="url(#overview-trend-fill)" />
-              {scanTrend.some((point) => typeof point.secondary === "number") && <Area isAnimationActive={false} type="monotone" name="Stratégies" dataKey="secondary" stroke="#50bcae" strokeWidth={1.7} fill="transparent" strokeDasharray="4 4" />}
+              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#c1b4ff", marginBottom: 5 }} labelFormatter={trendDate} />
+              <Area isAnimationActive={false} type="linear" name="Candidats" dataKey="value" stroke="#a084ff" strokeWidth={2.5} fill="url(#overview-trend-fill)" />
+              {scanTrend.some((point) => typeof point.secondary === "number") && <Area isAnimationActive={false} type="linear" name="Stratégies" dataKey="secondary" stroke="#50bcae" strokeWidth={1.7} fill="transparent" strokeDasharray="4 4" />}
             </AreaChart>
           </ResponsiveContainer> : <ChartEmpty icon={<BarChart3 size={24} />} text="Au moins deux relevés sont nécessaires pour tracer une tendance." />}
         </div>
@@ -125,16 +128,16 @@ export function Overview({ state }: { state: AppState }) {
     </div>
 
     <section className="panel overview-opportunities" aria-labelledby="overview-ranked-heading">
-      <div className="panel-heading"><div><h2 id="overview-ranked-heading">Opportunités classées</h2><p>{isDemo ? "Stratégies fictives issues des scans de démonstration" : "Stratégies issues de contrats vérifiés"}</p></div><Link href="/opportunities" className="button button-secondary">Voir les opportunités</Link></div>
-      <OpportunityTable opportunities={state.opportunities.slice(0, 5)} compact />
+      <div className="panel-heading"><div><h2 id="overview-ranked-heading">Opportunités classées</h2><p>{isDemo ? "Stratégies fictives issues des scans de démonstration" : "Analyses indicatives issues de contrats admissibles"}</p></div><Link href="/opportunities" className="button button-secondary">Voir les opportunités</Link></div>
+      <OpportunityTable opportunities={state.opportunities} compact />
     </section>
 
     <div className="overview-bottom">
       <section className="panel overview-summary" aria-labelledby="summary-heading">
         <div className="panel-heading"><div><h2 id="summary-heading">État de la recherche</h2><p>Dernier relevé et couverture</p></div><span className="panel-heading-icon"><Database size={18} /></span></div>
         <dl className="overview-summary-list">
-          <div><dt>Dernier scan</dt><dd>{lastScan?.completedAt ? dateLabel(lastScan.completedAt) : "Aucun scan terminé"}</dd></div>
-          <div><dt>Coût OpenAI du mois, estimé</dt><dd>{prices.format(cost)} USD</dd></div>
+          <div><dt>Dernier scan</dt><dd>{lastScan ? `${scanStatuses[lastScan.status]} · ${dateLabel(lastScan.completedAt ?? lastScan.startedAt)}` : "Aucun scan enregistré"}</dd></div>
+          <div><dt>Coût OpenAI du mois, estimé</dt><dd>{isDemo || state.research.pricingConfigured ? `${prices.format(cost)} USD` : "Tarifs indisponibles"}</dd></div>
           <div><dt>Dernière cotation incluse</dt><dd>{latestQuote ? dateLabel(latestQuote) : "Indisponible"}</dd></div>
         </dl>
       </section>
@@ -146,7 +149,7 @@ export function Overview({ state }: { state: AppState }) {
       <section className="panel overview-summary" aria-labelledby="equity-heading">
         <div className="panel-heading"><div><h2 id="equity-heading">Résultat papier cumulé</h2><p>Seulement les gains et pertes réalisés</p></div><span className="panel-heading-icon"><TrendingDown size={18} /></span></div>
         {state.analytics.equity.length > 1 ? <div className="overview-equity">
-          <ResponsiveContainer width="100%" height={110}><AreaChart data={state.analytics.equity} margin={{ top: 8, left: 2, right: 2, bottom: 3 }}><Area type="monotone" dataKey="value" name="P&L réalisé" stroke="#48cba2" strokeWidth={2} fill="#48cba21c" isAnimationActive={false} /><Tooltip contentStyle={tooltipStyle} formatter={(value) => signedPrice(Number(value))} labelFormatter={(label, entries) => dateLabel(entries[0]?.payload.date ?? String(label), false)} /></AreaChart></ResponsiveContainer>
+          <ResponsiveContainer width="100%" height={110}><AreaChart data={state.analytics.equity} margin={{ top: 8, left: 2, right: 2, bottom: 3 }}><Area type="stepAfter" dataKey="value" name="P&L réalisé" stroke="#48cba2" strokeWidth={2} fill="#48cba21c" isAnimationActive={false} /><Tooltip contentStyle={tooltipStyle} formatter={(value) => signedPrice(Number(value))} labelFormatter={(label, entries) => dateLabel(entries[0]?.payload.date ?? String(label), false)} /></AreaChart></ResponsiveContainer>
         </div> : <p className="overview-small-empty">L’historique réalisé sera disponible après plusieurs clôtures.</p>}
       </section>
     </div>
@@ -165,7 +168,7 @@ function Sparkline({ values, positive }: { values: number[]; positive: boolean }
   const max = Math.max(...values);
   const series = values.map((value) => ({ value: max === min ? 0.5 : (value - min) / (max - min) }));
   return <span className="overview-sparkline" aria-hidden="true">
-    <ResponsiveContainer width="100%" height="100%"><AreaChart data={series} margin={{ top: 2, bottom: 2, left: 1, right: 1 }}><Area isAnimationActive={false} type="monotone" dataKey="value" stroke={positive ? "#46cba2" : "#f17791"} strokeWidth={1.1} fill={positive ? "#46cba219" : "#f1779118"} /></AreaChart></ResponsiveContainer>
+    <ResponsiveContainer width="100%" height="100%"><AreaChart accessibilityLayer={false} data={series} margin={{ top: 2, bottom: 2, left: 1, right: 1 }}><Area isAnimationActive={false} type="monotone" dataKey="value" stroke={positive ? "#46cba2" : "#f17791"} strokeWidth={1.1} fill={positive ? "#46cba219" : "#f1779118"} /></AreaChart></ResponsiveContainer>
   </span>;
 }
 
@@ -177,6 +180,11 @@ function dateLabel(value: string, full = true) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value || "—";
   return new Intl.DateTimeFormat("fr-CA", full ? { dateStyle: "medium", timeStyle: "short", timeZone: "America/New_York" } : { day: "numeric", month: "short", timeZone: "UTC" }).format(date);
+}
+
+function trendDate(value: unknown) {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) ? dateLabel(new Date(timestamp).toISOString(), false) : "—";
 }
 
 function signedPrice(amount: number) {

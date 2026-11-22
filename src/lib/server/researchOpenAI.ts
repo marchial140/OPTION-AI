@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { Response } from "openai/resources/responses/responses";
-import type { ZodType, output } from "zod";
+import { z, type ZodType, type output } from "zod";
 
 export type ResearchRequestType = "screen" | "contract" | "chat";
 
@@ -18,6 +18,8 @@ export interface ResearchUsage extends UsageReservation {
   searchUsage: number;
   createdAt: string;
   usageAvailable?: boolean;
+  unreconciledCost?: number;
+  unreconciledSearches?: number;
 }
 
 export interface BudgetHooks {
@@ -25,8 +27,8 @@ export interface BudgetHooks {
   recordUsage?: (usage: ResearchUsage) => Promise<void>;
 }
 
-type ResearchErrorCode = "CONFIG" | "BUDGET" | "INPUT" | "TIMEOUT" | "RATE_LIMIT" |
-  "PROVIDER" | "SCHEMA" | "NO_SOURCES" | "CANCELLED";
+type ResearchErrorCode = "CONFIG" | "BUDGET" | "TIMEOUT" | "RATE_LIMIT" | "QUOTA" |
+  "PROVIDER" | "SCHEMA" | "NO_SOURCES" | "CANCELLED" | "REFUSAL";
 
 export class ResearchError extends Error {
   constructor(readonly code: ResearchErrorCode, message: string) {
@@ -113,19 +115,45 @@ function classifyProviderError(error: unknown, signal?: AbortSignal) {
         ? new ResearchError("TIMEOUT", "Le délai total de cette recherche est atteint.")
         : new ResearchError("CANCELLED", "Recherche annulée."),
       retry: false,
+      uncertain: true,
     };
   }
-  const data = typeof error === "object" && error !== null ? error as { status?: number; name?: string } : {};
-  if (data.status === 429) return { error: new ResearchError("RATE_LIMIT", "OpenAI limite les requêtes. Réessayez ultérieurement."), retry: true };
+  const data = typeof error === "object" && error !== null
+    ? error as { status?: number; name?: string; code?: string; headers?: Headers }
+    : {};
+  if (data.status === 429) {
+    if (data.code === "insufficient_quota") {
+      return { error: new ResearchError("QUOTA", "Le compte OpenAI a atteint son quota de facturation."), retry: false, uncertain: false };
+    }
+    const retryAfter = data.headers?.get?.("retry-after");
+    const waitSeconds = retryAfter && /^\d+(?:\.\d+)?$/.test(retryAfter) ? Number(retryAfter) :
+      retryAfter ? Math.max(0, (Date.parse(retryAfter) - Date.now()) / 1000) : 0;
+    return {
+      error: new ResearchError("RATE_LIMIT", "OpenAI limite les requêtes. Réessayez ultérieurement."),
+      retry: waitSeconds <= 2,
+      waitMs: Number.isFinite(waitSeconds) ? waitSeconds * 1000 : 0,
+      uncertain: false,
+    };
+  }
   if (data.name === "APIConnectionTimeoutError" || data.name === "TimeoutError" || data.status === 408) {
-    return { error: new ResearchError("TIMEOUT", "La recherche OpenAI a dépassé le délai configuré."), retry: true };
+    return { error: new ResearchError("TIMEOUT", "La recherche OpenAI a dépassé le délai configuré."), retry: true, uncertain: true };
   }
-  if (data.status === 401 || data.status === 403 || data.status === 404 || data.status === 400) {
-    return { error: new ResearchError("CONFIG", "OpenAI a refusé la configuration, le modèle ou la recherche Web."), retry: false };
+  const configFailures: Record<number, string> = {
+    400: "OpenAI a refusé le modèle ou les paramètres de cette recherche.",
+    401: "La clé API OpenAI a été refusée.",
+    403: "Le projet OpenAI ne dispose pas de l’accès requis.",
+    404: "Le modèle OpenAI configuré est introuvable ou inaccessible.",
+    422: "OpenAI a refusé les paramètres de cette recherche.",
+  };
+  const configMessage = data.status === undefined ? undefined : configFailures[data.status];
+  if (configMessage) {
+    return { error: new ResearchError("CONFIG", configMessage), retry: false, uncertain: false };
   }
+  const serverError = data.status !== undefined && data.status >= 500;
   return {
     error: new ResearchError("PROVIDER", "Le service de recherche OpenAI est temporairement indisponible."),
-    retry: data.name === "APIConnectionError" || (data.status !== undefined && data.status >= 500),
+    retry: data.name === "APIConnectionError" || serverError,
+    uncertain: data.status === undefined || serverError,
   };
 }
 
@@ -139,6 +167,31 @@ function countSearches(response: Response) {
   return response.output.filter((item) => item.type === "web_search_call" && item.action.type === "search").length;
 }
 
+function observedTokenCount(value: number | undefined) {
+  return value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function completedText(response: Response) {
+  if (response.status === "incomplete") {
+    const limit = response.incomplete_details?.reason;
+    const message = limit === "max_output_tokens"
+      ? "L’analyse OpenAI a atteint le plafond de sortie configuré."
+      : "OpenAI a interrompu l’analyse avant la fin.";
+    throw new ResearchError("SCHEMA", message);
+  }
+  if (response.status !== "completed") throw new ResearchError("PROVIDER", "OpenAI n’a pas terminé l’analyse.");
+  const messages = response.output.filter((item) => item.type === "message")
+    .filter((item) => item.status === "completed");
+  const final = messages.filter((item) => item.phase === "final_answer").at(-1) ??
+    messages.filter((item) => !item.phase).at(-1);
+  if (final?.content.some((block) => block.type === "refusal")) {
+    throw new ResearchError("REFUSAL", "OpenAI a refusé de produire une analyse pour cette demande.");
+  }
+  const text = final?.content.flatMap((block) => block.type === "output_text" ? [block.text] : []).join("");
+  if (!text) throw new ResearchError("SCHEMA", "OpenAI n’a pas retourné une analyse structurée complète.");
+  return text;
+}
+
 interface RequestInput<Schema extends ZodType> {
   type: ResearchRequestType;
   instructions: string;
@@ -147,8 +200,10 @@ interface RequestInput<Schema extends ZodType> {
   schemaName: string;
   deep?: boolean;
   web: boolean;
+  webDomains?: string[];
   maxOutputTokens: number;
   maxRequests: number;
+  maxWebCalls?: number;
   hooks?: BudgetHooks;
   signal?: AbortSignal;
   usages: ResearchUsage[];
@@ -165,11 +220,12 @@ export async function openAIRequest<Schema extends ZodType>(
   }
   const client = new OpenAI({
     apiKey,
+    baseURL: "https://api.openai.com/v1",
     maxRetries: 0,
     timeout: envInteger("AI_RESEARCH_TIMEOUT_MS", 22_000, 1_000, 55_000),
   });
   const retryMax = envInteger("AI_MAX_RETRIES", 1, 0, 2);
-  const maxToolCalls = input.web ? (input.deep ? 4 : 2) : 0;
+  const maxToolCalls = input.web ? (input.maxWebCalls ?? (input.deep ? 4 : 2)) : 0;
   // Search context size is advisory. Reserve conservatively and reconcile with actual usage.
   const estimatedWebContextTokens = input.web ? (input.deep ? 20_000 : 10_000) : 0;
   const reservedTokens = Buffer.byteLength(input.instructions + input.input, "utf8") +
@@ -202,7 +258,11 @@ export async function openAIRequest<Schema extends ZodType>(
         max_output_tokens: input.maxOutputTokens,
         text: { format },
         ...(input.web ? {
-          tools: [{ type: "web_search", search_context_size: input.deep ? "medium" : "low" }],
+          tools: [{
+            type: "web_search",
+            search_context_size: input.deep ? "medium" : "low",
+            ...(input.webDomains?.length ? { filters: { allowed_domains: input.webDomains } } : {}),
+          }],
           tool_choice: "required" as const,
           include: ["web_search_call.action.sources"],
           max_tool_calls: maxToolCalls,
@@ -212,29 +272,39 @@ export async function openAIRequest<Schema extends ZodType>(
       failure = classifyProviderError(error, input.signal);
     }
 
-    const inputTokens = response?.usage?.input_tokens ?? 0;
-    const outputTokens = response?.usage?.output_tokens ?? 0;
-    const searchUsage = response ? countSearches(response) : 0;
+    const observedInput = observedTokenCount(response?.usage?.input_tokens);
+    const observedOutput = observedTokenCount(response?.usage?.output_tokens);
+    const inputTokens = observedInput ?? 0;
+    const outputTokens = observedOutput ?? 0;
+    const hasOutput = Boolean(response && Array.isArray(response.output));
+    const searchUsage = response && hasOutput ? countSearches(response) : 0;
+    const usageAvailable = observedInput !== null && observedOutput !== null && hasOutput;
+    const estimatedCost = computeCost(pricing, inputTokens, outputTokens, searchUsage);
+    const uncertain = Boolean(response ? !usageAvailable : failure?.uncertain);
     const usage: ResearchUsage = {
       model: model.name,
       requestType: input.type,
       inputTokens,
       outputTokens,
       searchUsage,
-      estimatedCost: computeCost(pricing, inputTokens, outputTokens, searchUsage),
+      estimatedCost,
       createdAt: new Date().toISOString(),
-      usageAvailable: Boolean(response?.usage),
+      usageAvailable,
+      ...(uncertain ? {
+        unreconciledCost: Number(Math.max(reservation.estimatedCost - estimatedCost, 0).toFixed(8)),
+        unreconciledSearches: hasOutput ? 0 : Math.max(maxToolCalls - searchUsage, 0),
+      } : {}),
     };
     input.usages.push(usage);
     await input.hooks?.recordUsage?.(usage);
     if (!failure) break;
     if (!failure.retry || retry === retryMax || input.usages.length >= input.maxRequests) throw failure.error;
-    await new Promise((resolve) => setTimeout(resolve, 200 * 2 ** retry));
+    const waitMs = Math.max(200 * 2 ** retry, failure.waitMs ?? 0);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
-  if (!response || response.status !== "completed" || !response.output_text) {
-    throw new ResearchError("SCHEMA", "OpenAI n’a pas retourné une analyse structurée complète.");
-  }
+  if (!response || !Array.isArray(response.output)) throw new ResearchError("SCHEMA", "OpenAI a retourné une réponse incomplète.");
+  const text = completedText(response);
   if (input.web && !response.output.some((item) =>
     item.type === "web_search_call" && item.action.type === "search" && item.status === "completed",
   )) {
@@ -243,11 +313,35 @@ export async function openAIRequest<Schema extends ZodType>(
 
   let json: unknown;
   try {
-    json = JSON.parse(response.output_text);
+    json = JSON.parse(text);
   } catch {
     throw new ResearchError("SCHEMA", "OpenAI a retourné une réponse illisible.");
   }
   const parsed = input.schema.safeParse(json);
   if (!parsed.success) throw new ResearchError("SCHEMA", "La réponse OpenAI ne respecte pas le format de recherche.");
   return { data: parsed.data, response };
+}
+
+
+export async function testOpenAIConnection(hooks: BudgetHooks, signal?: AbortSignal) {
+  const usages: ResearchUsage[] = [];
+  const schema = z.object({title:z.string()});
+  let error: ResearchError | undefined;
+  try {
+    await openAIRequest({
+      type:"screen", instructions:"Search the official OpenAI website and return the title of its API documentation page.",
+      input:"Find the OpenAI API documentation.", schema, schemaName:"connection_test",
+      web:true, webDomains:["developers.openai.com","platform.openai.com"],
+      maxWebCalls:1, maxOutputTokens:256, maxRequests:1, usages, hooks, signal,
+    });
+  } catch (failure) {
+    if (!(failure instanceof ResearchError)) throw failure;
+    error = failure;
+  }
+  const usage = usages[0];
+  return {
+    ok:!error, message:error?.message ?? "Connexion OpenAI et recherche Web vérifiées.",
+    estimatedCost:usage?.usageAvailable ? usage.estimatedCost : null,
+    unreconciledCost:usage?.unreconciledCost ?? null,
+  };
 }

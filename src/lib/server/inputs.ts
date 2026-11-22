@@ -48,13 +48,15 @@ export const scanInput = z.object({
   watchlistId: id.optional(),
 }).strict();
 
-export const watchlistsInput = z.object({watchlists:z.array(z.object({
-  id, name:z.string().trim().min(1).max(80), items:uniqueSymbols,
-})).min(1).max(20).refine((items) => new Set(items.map((item) => item.id)).size === items.length)});
+export const watchlistInput = z.object({
+  id:z.string().regex(/^[A-Za-z0-9_-]{1,120}$/), name:z.string().trim().min(1).max(80), items:uniqueSymbols,
+});
+export const watchlistsInput = z.object({watchlists:z.array(watchlistInput)
+  .min(1).max(20).refine((items) => new Set(items.map((item) => item.id)).size === items.length)});
 export const watchlistItemInput = z.object({symbol:symbolInput,watchlistId:id.optional()});
 export const openTradeInput = z.object({input:strategyInputSchema,entryDebit:money.positive(),entryDate:date,
   notes:z.string().trim().max(4000).optional(),opportunityId:id.optional()});
-export const exitTradeInput = z.object({quantity:z.number().int().min(1).max(100),exitCredit:money,fees:money,
+export const exitTradeInput = z.object({quantity:z.number().int().min(1).max(100),exitCredit:z.number().finite().min(-1_000_000_000).max(1_000_000_000),fees:money,
   exitDate:date,notes:z.string().trim().max(4000).optional()});
 export const chatInput = z.object({message:z.string().trim().min(1).max(2000),opportunityId:id.optional(),
   history:z.array(z.object({role:z.enum(['user','assistant']),text:z.string().min(1).max(3000)})).max(6).optional()});

@@ -1,8 +1,9 @@
 import { makeDemoFixtures } from "../demo";
 import {
-  constructStrategies, defaultRiskPreferences, type ConstructionContext, type EvidenceSource, type Opportunity,
-  type ContractQuote, type ResearchCandidate, type RiskPreferences,
+  constructStrategies, defaultRiskPreferences, makeOccSymbol, type ConstructionContext, type EvidenceSource, type Opportunity,
+  type ContractQuote, type DataStatus, type ResearchCandidate, type RiskPreferences,
 } from "../quant";
+import { z } from "zod";
 import type { Mode, ScanType } from "../workspace";
 import { marketSession } from "./market";
 import {
@@ -50,6 +51,7 @@ export interface ResearchEvidence {
   kind: "thesis" | "bullish" | "bearish" | "news" | "risk" | "volatility" | "earnings" | "underlying" | "option";
   text: string;
   source: EvidenceSource;
+  status?: DataStatus;
 }
 
 export type ResearchedCandidate = ResearchCandidate & { evidence?: ResearchEvidence[]; uncertainty?: string[] };
@@ -89,6 +91,28 @@ interface ResearchContext {
   maxRequests: number;
 }
 
+type WebContract = z.infer<typeof discoverySchema>["contracts"][number];
+const providerTimestamp = z.iso.datetime({ offset: true });
+
+function assessWebContract(observation: WebContract, symbol: string, now: Date) {
+  const { bid, ask, quoteAt, multiplier, currency } = observation;
+  if (bid === null || ask === null || !quoteAt || multiplier === null || !currency) {
+    return { status: "INSUFFICIENT", text: "Cotation d’option écartée. Il manque le bid, l’ask, l’horodatage, la devise ou le multiplicateur." } as const;
+  }
+  const identifier = observation.identifier.trim().toUpperCase().replace(/^([A-Z0-9]{1,6}) +(?=\d{6}[CP]\d{8}$)/, "$1");
+  let coherentIdentity = false;
+  try {
+    coherentIdentity = identifier === makeOccSymbol(symbol, observation.expiration, observation.type, observation.strike);
+  } catch {
+    // Invalid or adjusted identifiers do not enter the quantitative engine.
+  }
+  if (!coherentIdentity || multiplier !== 100 || currency !== "USD" || bid < 0 || ask < bid ||
+      !providerTimestamp.safeParse(quoteAt).success || Date.parse(quoteAt) > now.getTime() + 60_000) {
+    return { status: "CONTRADICTORY", text: "Cotation d’option écartée. Les champs déclarés présentent une incohérence contractuelle ou d’horodatage." } as const;
+  }
+  return { status: "UNVERIFIED", text: "Contrat signalé sur le Web. Cotation écartée faute de validation indépendante." } as const;
+}
+
 class OpenAIWebResearchProvider implements MarketDataProvider {
   getDataCapabilities(): ProviderCapabilities {
     return {
@@ -104,7 +128,7 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
     const { data, response } = await openAIRequest({
       type: "screen", instructions: screenInstructions, schema: screenSchema, schemaName: "underlying_research",
       input: JSON.stringify({ symbol, asOf: context.now.toISOString(), depth: deep ? "approfondie" : "rapide", prioritizeDomains: trustedResearchDomains }),
-      deep, web: true, maxOutputTokens: deep ? 2800 : 1800, maxRequests: context.maxRequests,
+      deep, web: true, webDomains: trustedResearchDomains, maxOutputTokens: deep ? 2800 : 1800, maxRequests: context.maxRequests,
       signal: context.signal, hooks: context.hooks, usages: context.usages,
     });
     if (data.ticker.toUpperCase() !== symbol) throw new ResearchError("SCHEMA", "Le symbole retourné ne correspond pas au symbole demandé.");
@@ -115,7 +139,7 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
     const evidence: ResearchEvidence[] = [];
     function select(claims: Claim[], kind: ResearchEvidence["kind"]) {
       const accepted = claims.slice(0, 6).flatMap((claim) => {
-        const observation = boundClaim(claim, examinedSources, retrieved);
+        const observation = boundClaim(claim, examinedSources);
         return observation ? [{ kind, ...observation }] : [];
       });
       evidence.push(...accepted);
@@ -126,18 +150,17 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
     const bullishFactors = select(data.bullishFactors, "bullish");
     const bearishFactors = select(data.bearishFactors, "bearish");
     const risks = [...select(data.eventRisks, "risk"), ...select(data.sectorRisks, "risk")];
-    select(data.news, "news");
+    const news = select(data.news, "news");
     if (data.volatilityContext) select([data.volatilityContext], "volatility");
 
     const domains = new Set(evidence.map(({ source }) => source.publisher));
-    const directionBacked = Boolean(thesis) && (data.direction !== "bullish" || bullishFactors.length > 0) &&
+    const directionBacked = Boolean(thesis) &&
+      (bullishFactors.length > 0 || bearishFactors.length > 0 || news.length > 0) &&
+      (data.direction !== "bullish" || bullishFactors.length > 0) &&
       (data.direction !== "bearish" || bearishFactors.length > 0) &&
       (data.direction !== "mixed" || (bullishFactors.length > 0 && bearishFactors.length > 0));
     const direction = directionBacked && (!deep || domains.size >= 2) ? data.direction : "insufficient";
-    const uncertainty = data.uncertainty.slice(0, 6).flatMap((note) => {
-      const safe = cleanText(note, 200);
-      return safe ? [safe] : [];
-    }).filter((note) => !checkNumericAssertion(note));
+    const uncertainty = ["La thèse synthétise des sources Web citées. Les cotations exigent une validation indépendante."];
     const rejections: string[] = [];
 
     if (direction === "insufficient") {
@@ -146,12 +169,21 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
         : "Les sources ne suffisent pas à étayer une direction.");
     }
     if (data.earnings) {
-      const source = boundSource(data.earnings.source, examinedSources, retrieved);
-      if (source) evidence.push({ kind: "earnings", text: "Une échéance de résultats a été mentionnée. Date écartée faute de validation indépendante.", source });
+      const source = boundSource(data.earnings.source, examinedSources);
+      if (source) evidence.push({ kind: "earnings", status: "UNVERIFIED", text: "Une échéance de résultats a été mentionnée. Date écartée faute de validation indépendante.", source });
     }
     if (data.underlyingQuote) {
-      const source = boundSource(data.underlyingQuote.source, examinedSources, retrieved);
-      if (source) evidence.push({ kind: "underlying", text: "Cours signalé dans la recherche Web et écarté faute de preuve indépendante.", source });
+      const source = boundSource(data.underlyingQuote.source, examinedSources);
+      const { price, quoteAt, currency } = data.underlyingQuote;
+      if (source) {
+        const status = !quoteAt ? "INSUFFICIENT" : currency !== "USD" || price <= 0 ||
+          !providerTimestamp.safeParse(quoteAt).success || Date.parse(quoteAt) > retrieved.getTime() + 60_000
+          ? "CONTRADICTORY" : "UNVERIFIED";
+        evidence.push({
+          kind: "underlying", status,
+          text: "Cours signalé dans la recherche Web et écarté faute de preuve indépendante.", source,
+        });
+      }
     }
     rejections.push("Cours et variation du sous-jacent indisponibles sous une forme vérifiée.");
 
@@ -173,7 +205,7 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
         symbol, asOf: context.now.toISOString(), minDte: preferences.minDte ?? defaultRiskPreferences.minDte,
         maxDte: preferences.maxDte ?? defaultRiskPreferences.maxDte,
       }),
-      deep: context.mode === "deep", web: true, maxOutputTokens: 2200, maxRequests: context.maxRequests,
+      deep: context.mode === "deep", web: true, webDomains: trustedResearchDomains, maxOutputTokens: 2200, maxRequests: context.maxRequests,
       signal: context.signal, hooks: context.hooks, usages: context.usages,
     });
     if (data.ticker.toUpperCase() !== symbol) throw new ResearchError("SCHEMA", "Le symbole retourné par la recherche d’options est incorrect.");
@@ -181,12 +213,12 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
     const sources = gatherSources(response, retrieved);
     const evidence: ResearchEvidence[] = [];
     for (const claim of data.warnings.slice(0, 6)) {
-      const linked = boundClaim(claim, sources, retrieved);
+      const linked = boundClaim(claim, sources);
       if (linked) evidence.push({ kind: "option", ...linked });
     }
     for (const observation of data.contracts.slice(0, 12)) {
-      const source = boundSource(observation.source, sources, retrieved);
-      if (source) evidence.push({ kind: "option", text: "Contrat signalé sur le Web. Cotation écartée faute de validation indépendante.", source });
+      const source = boundSource(observation.source, sources);
+      if (source) evidence.push({ kind: "option", source, ...assessWebContract(observation, symbol, retrieved) });
     }
     const distinct = [...new Map(evidence.map((item) => [`${item.source.url} ${item.text}`, item])).values()];
     const reason = distinct.length

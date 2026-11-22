@@ -1,6 +1,6 @@
 # API integration
 
-The Next.js route handlers consume JSON and resolve identity on the server. For live use, sign in with a Supabase email/password account. The browser receives an HTTP-only session cookie. Mutating calls from the browser use the same origin as the application.
+The Next.js route handlers consume JSON and resolve identity on the server. For live use, sign in with a Supabase email/password account. The browser receives an HTTP-only session cookie. Mutating calls from the browser use the application origin. Behind a reverse proxy, configure the public origin in `APP_BASE_URL`.
 
 Error responses provide `error.code`, `error.message`, and `error.requestId`. Validation errors can include `error.fields`. The response `X-Request-Id` header supports tracing a failed request.
 
@@ -22,7 +22,8 @@ Error responses provide `error.code`, `error.message`, and `error.requestId`. Va
 | `GET /api/scans/:id/export` or `DELETE /api/scans/:id` | Export or delete a saved scan |
 | `GET /api/opportunities` or `GET /api/opportunities/:id` | Retrieve opportunities or inspect a specific record |
 | `GET /api/watchlists` or `PUT /api/watchlists` | Read or replace watchlists |
-| `POST /api/watchlists/items` or `DELETE /api/watchlists/:id` | Add a symbol or remove a watchlist |
+| `POST /api/watchlists/list` or `DELETE /api/watchlists/:id` | Create or remove one watchlist |
+| `POST /api/watchlists/items` or `DELETE /api/watchlists/:id/items/:symbol` | Add or remove one symbol without replacing the collection |
 | `POST /api/strategies/calculate` | Calculate a strategy from supplied contracts and assumptions |
 | `POST /api/ai/chat` or `POST /api/ai/research` | Ask the research assistant about the current user's saved evidence |
 | `GET /api/quotes`, `POST /api/quotes`, or `DELETE /api/quotes/:id` | List, submit, or remove user-attested broker quotes |
@@ -36,7 +37,7 @@ Error responses provide `error.code`, `error.message`, and `error.requestId`. Va
 
 The reset endpoint retains the current UTC calendar month's AI usage records for budget enforcement. It rejects a reset while research is active.
 
-A scan request can supply symbols directly or select a saved watchlist. Provide a unique `Idempotency-Key` to retrieve the original scan if the caller retries. This body creates a targeted scan for two assets.
+A scan request can supply symbols directly or select a saved watchlist. Supply an `Idempotency-Key` and the same request body when retrying a scan, paper opening, or paper exit. Reusing a key with a different transaction returns HTTP 409. This body creates a targeted scan for two assets.
 
 ```json
 {
@@ -55,7 +56,7 @@ External pages are research inputs. The request instructions tell the model to i
 
 Set `OPENAI_MODEL` to a model with web search and structured output enabled for the project. Configure `AI_INPUT_USD_PER_MILLION`, `AI_OUTPUT_USD_PER_MILLION`, and `AI_SEARCH_USD_PER_CALL` for the configured model and tool. A separate `OPENAI_DEEP_MODEL` requires `AI_DEEP_INPUT_USD_PER_MILLION` and `AI_DEEP_OUTPUT_USD_PER_MILLION`. Use rates applicable to your account and model. See [OpenAI API pricing](https://openai.com/api/pricing/).
 
-Usage-based estimates use input tokens, output tokens, and search calls observed in responses. They may differ from billed amounts. `AI_RESEARCH_TIMEOUT_MS`, `AI_MAX_RETRIES`, `AI_MAX_CALLS_PER_TICKER`, and `MAX_AI_REQUESTS_PER_SCAN` configure operational bounds. Daily and monthly budget periods follow UTC and apply independently of scan mode.
+Usage-based estimates use input tokens, output tokens, and search calls observed in responses. They may differ from billed amounts. `AI_RESEARCH_TIMEOUT_MS`, `AI_MAX_RETRIES`, `AI_MAX_CALLS_PER_TICKER`, and `MAX_AI_REQUESTS_PER_SCAN` configure operational bounds. Daily and monthly budget periods follow UTC and apply to each authenticated workspace. In-flight reservations and potentially billable attempts without reconciliation count against the workspace budget. Reported estimates, pending reservations, and unreconciled estimates are tracked separately. Configure a provider-side project limit for shared-account spending.
 
 ### Market session and data coverage
 

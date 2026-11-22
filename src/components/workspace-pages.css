@@ -108,3 +108,21 @@
   .wp-spin { animation: none; }
   .wp-button { transition: none; }
 }
+.wp-card-row p, .wp-card-row li, .wp-sources { overflow-wrap: anywhere; }
+.wp-wrap-table th, .wp-wrap-table td { white-space: normal; vertical-align: top; }
+.wp-wrap-table small { line-height: 1.55; }
+.wp-sort-status { display: flex; gap: 6px; align-items: center; }
+.wp-sort-status > svg { flex: 0 0 auto; }
+#data-sources { scroll-margin-top: 80px; }
+@media (max-width: 560px) {
+  .wp input:not([type="checkbox"]):not([type="range"]), .wp select, .wp textarea { font-size: 1rem; }
+  .wp-button, .wp-button.wp-icon { min-height: 42px; }
+  .wp-button.wp-icon { min-width: 42px; }
+  .wp-inline-input > .wp-field { min-width: 0; }
+}
+.wp-watch-table:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 2px; }
+@media (max-width: 560px) {
+  .wp-watch-table th:first-child, .wp-watch-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--wp-surface); box-shadow: 1px 0 0 var(--wp-border); }
+  .wp-watch-table td:first-child small { max-width: 91px; white-space: normal; }
+}
+.wp-form-lock { display: grid; min-width: 0; gap: 16px; border: 0; padding: 0; margin: 0; }

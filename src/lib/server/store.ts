@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, open, readFile, readdir, rename, rm, rmdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { WorkspaceState } from '@/lib/workspace'
 import { seedWorkspace } from './demo-state'
@@ -7,6 +7,7 @@ import { dataDirectory, remoteDemoStorage, supabaseConfig, type Identity } from 
 
 const uid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 const maxRemoteAttempts = 8
+const workspaceCollections = ['watchlists', 'scans', 'portfolio', 'notifications', 'manualQuotes', 'usage', 'reservations'] as const
 const wait = (ms: number) => new Promise<void>((finish) => setTimeout(finish, ms))
 
 export class StorageError extends Error {
@@ -43,14 +44,16 @@ function storageConfig() {
   return { ...config, serviceRole: config.serviceRole }
 }
 
-async function storageRequest<T>(path: string, init?: { method: 'POST'; body: string }): Promise<T> {
+async function storageRequest<T>(path: string, init?: { method: 'POST'; body: string }, accessToken?: string): Promise<T> {
   const config = storageConfig()
+  const key = accessToken ? config.key : config.serviceRole
+  const authorization = accessToken ?? (key.startsWith('sb_secret_') ? undefined : key)
   try {
     const response = await fetch(`${config.url}/rest/v1/${path}`, {
       ...init,
       headers: {
-        apikey: config.serviceRole,
-        ...(!config.serviceRole.startsWith('sb_secret_') && { Authorization: `Bearer ${config.serviceRole}` }),
+        apikey: key,
+        ...(authorization && { Authorization: `Bearer ${authorization}` }),
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
@@ -66,17 +69,30 @@ async function storageRequest<T>(path: string, init?: { method: 'POST'; body: st
 }
 
 async function readRemote(identity: Identity): Promise<Version> {
-  const result = await storageRequest<Version[]>(`${table(identity)}?owner_id=eq.${identity.userId}&select=revision,value&limit=1`)
+  const token = identity.mode === 'live' && !identity.admin ? identity.token : undefined
+  const result = await storageRequest<Version[]>(`${table(identity)}?owner_id=eq.${identity.userId}&select=revision,value&limit=1`, undefined, token)
   return result[0] ?? { revision: 0, value: seedWorkspace(identity.mode) }
 }
 
 async function readLocal(identity: Identity) {
+  let state: unknown
   try {
-    return JSON.parse(await readFile(localPath(identity), 'utf8')) as WorkspaceState
+    state = JSON.parse(await readFile(localPath(identity), 'utf8'))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw new StorageError('Impossible de lire les données de cet espace démo.')
   }
+  if (!state || typeof state !== 'object' || !('settings' in state)
+    || !state.settings || typeof state.settings !== 'object' || !('schedule' in state.settings)
+    || !state.settings.schedule || typeof state.settings.schedule !== 'object'
+    || !('enabled' in state.settings.schedule) || typeof state.settings.schedule.enabled !== 'boolean'
+    || !workspaceCollections.every((name) => {
+      const rows: unknown = Reflect.get(state, name)
+      return Array.isArray(rows) && rows.every((row) => row && typeof row === 'object')
+    })) {
+    throw new StorageError('Les données de cet espace démo sont incomplètes.')
+  }
+  return state as WorkspaceState
 }
 
 export async function readWorkspace(identity: Identity): Promise<WorkspaceState> {
@@ -86,66 +102,99 @@ export async function readWorkspace(identity: Identity): Promise<WorkspaceState>
   return stored.revision > 0 ? stored.value : mutateWorkspace(identity, (draft) => draft)
 }
 
-async function reclaimLock(path: string) {
-  const recovery = `${path}.recovery`
-  const info = await stat(path).catch(() => null)
-  if (!info || Date.now() - info.mtimeMs < 2_000) return
+function processExists(pid: number) {
+  if (!Number.isSafeInteger(pid) || pid <= 0 || pid > 2_147_483_647) return false
   try {
-    await mkdir(recovery)
+    process.kill(pid, 0)
+    return true
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EPERM') return true
+    if (code === 'ESRCH') return false
     throw error
-  }
-  try {
-    const owner = await readFile(path, 'utf8').catch(() => null)
-    if (owner === null) return
-    const pid = Number(owner)
-    const current = await stat(path).catch(() => null)
-    if (!current || Date.now() - current.mtimeMs < 2_000) return
-    if (Number.isInteger(pid) && pid > 0) {
-      try {
-        process.kill(pid, 0)
-        return
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code
-        if (code === 'EPERM') return
-        if (code !== 'ESRCH') throw error
-      }
-    }
-    await rm(path, { force: true })
-  } finally {
-    await rm(recovery, { recursive: true, force: true })
   }
 }
 
-async function acquireLock(path: string) {
-  const deadline = Date.now() + 5_000
-  while (Date.now() < deadline) {
+async function removeEmptyLock(path: string) {
+  try {
+    await rmdir(path)
+  } catch (error) {
+    if (!['ENOENT', 'ENOTEMPTY', 'EEXIST', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+  }
+}
+
+async function removeLockOwner(path: string) {
+  try {
+    await unlink(path)
+  } catch (error) {
+    if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+  }
+}
+
+async function reclaimLegacyLock(path: string) {
+  const info = await stat(path).catch(() => null)
+  if (!info?.isFile() || Date.now() - info.mtimeMs < 2_000) return
+  const owner = await readFile(path, 'utf8').catch(() => null)
+  if (owner !== null && !processExists(Number(owner))) {
     try {
-      const file = await open(path, 'wx', 0o600)
-      try {
-        await file.writeFile(String(process.pid), 'utf8')
-      } catch (error) {
-        await rm(path, { force: true })
-        throw error
-      } finally {
-        await file.close()
-      }
-      return
+      await removeLockOwner(path)
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      await reclaimLock(path)
-      await wait(25 + Math.floor(Math.random() * 20))
+      if (!['EISDIR', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
     }
   }
-  throw new StorageError('Cet espace est occupé. Réessayez dans un instant.', 409, 'STORAGE_CONFLICT')
+}
+
+async function reclaimLock(path: string) {
+  let owners: string[]
+  try {
+    owners = await readdir(path)
+  } catch (error) {
+    switch ((error as NodeJS.ErrnoException).code) {
+      case 'ENOENT': return
+      case 'ENOTDIR': return reclaimLegacyLock(path)
+      default: throw error
+    }
+  }
+  for (const owner of owners) {
+    const processId = /^(\d+)-[0-9a-f-]{36}$/u.exec(owner)?.[1]
+    if (!processId || processExists(Number(processId))) return
+    await removeLockOwner(resolve(path, owner))
+  }
+  await removeEmptyLock(path)
+}
+
+async function acquireLock(path: string) {
+  const id = `${process.pid}-${randomUUID()}`
+  const staging = `${path}.${id}.tmp`
+  await mkdir(staging, { mode: 0o700 })
+  try {
+    // Rename a nonempty directory into place so its owner is always visible.
+    await writeFile(resolve(staging, id), '', { flag: 'wx', mode: 0o600 })
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      try {
+        await rename(staging, path)
+        return async () => {
+          await removeLockOwner(resolve(path, id))
+          await removeEmptyLock(path)
+        }
+      } catch (error) {
+        if (!['EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EISDIR', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+        await reclaimLock(path)
+        await wait(25 + Math.floor(Math.random() * 20))
+      }
+    }
+    throw new StorageError('Cet espace est occupé. Réessayez dans un instant.', 409, 'STORAGE_CONFLICT')
+  } finally {
+    await rm(staging, { recursive: true, force: true })
+  }
 }
 
 async function mutateLocal<T>(identity: Identity, updater: (draft: WorkspaceState) => T): Promise<T> {
   const path = localPath(identity)
   const lock = `${path}.lock`
   await mkdir(localDirectory(), { recursive: true, mode: 0o700 })
-  await acquireLock(lock)
+  const release = await acquireLock(lock)
   try {
     const draft = await readLocal(identity) ?? seedWorkspace(identity.mode)
     const result = updater(draft)
@@ -164,7 +213,7 @@ async function mutateLocal<T>(identity: Identity, updater: (draft: WorkspaceStat
     }
     return result
   } finally {
-    await rm(lock, { force: true })
+    await release()
   }
 }
 
@@ -238,7 +287,13 @@ async function localScheduledIdentities(): Promise<Identity[]> {
     const userId = name.slice(0, -5)
     if (!uid.test(userId)) continue
     const identity: Identity = { mode: 'demo', userId, admin: true }
-    const state = await readLocal(identity)
+    let state: WorkspaceState | null
+    try {
+      state = await readLocal(identity)
+    } catch (error) {
+      if (!(error instanceof StorageError)) throw error
+      continue
+    }
     if (state && needsJob(state)) identities.push(identity)
   }
   return identities

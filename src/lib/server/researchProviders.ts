@@ -1,4 +1,4 @@
-import { type ContractQuote, type EvidenceSource, contractQuoteSchema, validateQuote } from "../quant";
+import { type ContractQuote, type EvidenceSource, contractQuoteSchema, makeOccSymbol, validateQuote } from "../quant";
 import { makeDemoFixtures } from "../demo";
 import { marketSession } from "./market";
 import { z } from "zod";
@@ -55,15 +55,9 @@ export type ManualQuoteInput = z.input<typeof manualQuoteSchema>;
 export function validateManualQuote(value: unknown, expectedSymbol?: string, now = new Date()) {
   const parsed = manualQuoteSchema.safeParse(value);
   if (!parsed.success) {
-    return { quote: null, reason: "Renseignez la cotation du courtier et confirmez sa provenance." } as const;
+    return { quote: null, status: "INSUFFICIENT", reason: "Renseignez la cotation du courtier et confirmez sa provenance." } as const;
   }
   const fields = parsed.data;
-  const at = new Date(fields.quoteAt);
-  const session = marketSession(at);
-  const closeTime = session.earlyClose ? "13:00" : "16:00";
-  if (!session.optionsOpen && !(session.status === "after-hours" && session.time === closeTime)) {
-    return { quote: null, reason: "L’horodatage doit correspondre à la séance régulière US ou à sa clôture." } as const;
-  }
   const quote = contractQuoteSchema.parse({
     ...fields,
     retrievedAt: now.toISOString(),
@@ -74,16 +68,31 @@ export function validateManualQuote(value: unknown, expectedSymbol?: string, now
       confidence: "user-attested",
       citation: "Cotation du courtier saisie et attestée par l’utilisateur.",
     },
-    // A manual observation is indicative, even when its declared timestamp is recent.
-    status: "VERIFIED_DELAYED",
+    status: "MANUAL_ATTESTED",
   });
   const validation = validateQuote(quote, expectedSymbol ?? quote.symbol, now);
-  if (!validation.valid) return { quote: null, reason: validation.reason ?? "Cotation non admissible." } as const;
-  return { quote: { ...quote, status: validation.status }, reason: null } as const;
+  if (!validation.valid) {
+    return { quote: null, status: validation.status, reason: validation.reason ?? "Cotation non admissible." } as const;
+  }
+  const session = marketSession(new Date(quote.quoteAt));
+  const closeTime = session.earlyClose ? "13:00" : "16:00";
+  if (!session.optionsOpen && !(session.status === "after-hours" && session.time === closeTime)) {
+    return { quote: null, status: "CONTRADICTORY", reason: "L’horodatage doit correspondre à la séance régulière US ou à sa clôture." } as const;
+  }
+  const id = makeOccSymbol(quote.symbol, quote.expiration, quote.type, quote.strike);
+  return { quote: { ...quote, id, status: validation.status }, status: validation.status, reason: null } as const;
 }
 
 export class ManualVerifiedQuoteProvider implements MarketDataProvider {
-  constructor(private readonly quotes: ContractQuote[]) {}
+  private readonly quotes: ContractQuote[];
+
+  constructor(quotes: ContractQuote[]) {
+    this.quotes = quotes.flatMap((quote) => {
+      if (quote.source.method !== "manual-broker" || quote.source.confidence !== "user-attested") return [];
+      if (quote.status !== "VERIFIED_DELAYED" && quote.status !== "MANUAL_ATTESTED") return [];
+      return [{ ...quote, status: "MANUAL_ATTESTED" }];
+    });
+  }
 
   getDataCapabilities(): ProviderCapabilities {
     return {
@@ -95,8 +104,7 @@ export class ManualVerifiedQuoteProvider implements MarketDataProvider {
   getMarketSession = marketSession;
 
   async getOptionsChain(symbol: string) {
-    return this.quotes.filter((quote) => quote.symbol === symbol &&
-      quote.status !== "DEMO" && quote.source.method === "manual-broker");
+    return this.quotes.filter((quote) => quote.symbol === symbol);
   }
 
   async getOptionExpirations(symbol: string) {
@@ -104,8 +112,7 @@ export class ManualVerifiedQuoteProvider implements MarketDataProvider {
   }
 
   async getOptionQuote(identifier: string) {
-    return this.quotes.find((quote) => quote.id === identifier &&
-      quote.status !== "DEMO" && quote.source.method === "manual-broker") ?? null;
+    return this.quotes.find((quote) => quote.id === identifier) ?? null;
   }
 }
 

@@ -19,6 +19,7 @@ Quote time describes the observation. Retrieval time records when research obtai
 | --- | --- |
 | `VERIFIED_FRESH` | Supported quote time lies within the configured freshness window |
 | `VERIFIED_DELAYED` | Supported quote has an explicit delay or exceeds the fresh window |
+| `MANUAL_ATTESTED` | User-attested broker observation that passed structural validation |
 | `VERIFIED_HISTORICAL` | Traceable past observation associated with historical research |
 | `STALE` | Quote is too old for the requested use |
 | `UNVERIFIED` | Supplied data still requires independent evidence |
@@ -26,9 +27,9 @@ Quote time describes the observation. Retrieval time records when research obtai
 | `CONTRADICTORY` | Supplied fields or sources disagree |
 | `DEMO` | Synthetic data confined to demo |
 
-Contract validation checks the standard OCC identity, USD denomination, verified multiplier of 100, expiry, bid/ask ordering, and consistent observation and retrieval times. It treats observations older than 15 minutes as delayed and those older than 36 hours as stale. Conflicting bid and ask records for the same contract and observation time are rejected. See [Risk engine](RISK_ENGINE.md).
+Contract validation checks the standard OCC identity, USD denomination, verified multiplier of 100, expiry, bid/ask ordering, and consistent observation and retrieval times. It treats observations older than 15 minutes as delayed and those older than 36 hours as stale. Conflicting bid and ask records for the same contract and observation time are rejected. Multi-leg opportunities require observations within five minutes of one another and compatible provenance. See [Risk engine](RISK_ENGINE.md).
 
-Attested broker observations must refer to the regular session or its closing time. Their source method is `manual-broker` and confidence is `user-attested`. These observations remain indicative and enter the strategy pipeline under `VERIFIED_DELAYED` after structural checks.
+Attested broker observations must refer to the regular session or its closing time. Their source method is `manual-broker` and confidence is `user-attested`. These observations remain indicative and enter the strategy pipeline under `MANUAL_ATTESTED` after structural checks. Older records tagged as delayed but identified as `manual-broker` are displayed as manual attestations. The current view excludes withdrawn, superseded, expired, and stale observations. Historical scans retain their recorded source and quote time.
 
 A validation status describes support and timing for a specific research use. For web and historical observations, the ability to transact at a reported price remains unknown. The equity options session indicator follows regular hours. Individual products and venues can use different hours.
 

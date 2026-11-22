@@ -57,6 +57,7 @@ export type Scan = {
   error?: string;
   parameters?: Settings;
   idempotencyKey?: string;
+  requestFingerprint?: string;
   lease?: { id: string; expiresAt: string };
   cached?: string[];
   examinedSources?: EvidenceSource[];
@@ -113,6 +114,10 @@ export type Usage = {
   estimatedCost: number;
   createdAt: string;
   scanId?: string;
+  reservationId?: string;
+  unreconciledCost?: number;
+  unreconciledSearches?: number;
+  usageAvailable?: boolean;
 };
 
 export type BudgetReservation = {
@@ -121,6 +126,9 @@ export type BudgetReservation = {
   estimatedCost: number;
   expiresAt: string;
   estimatedSearches?: number;
+  createdAt?: string;
+  model?: string;
+  requestType?: Usage['requestType'];
 };
 
 export type WorkspaceState = {
@@ -167,7 +175,7 @@ export type AppState = Omit<WorkspaceState, 'usage' | 'reservations' | 'manualQu
   mode: Mode;
   user: { email?: string };
   market: MarketState;
-  research: { configured: boolean; model?: string; pricingConfigured?: boolean; webSearch?: boolean; demoAvailable?: boolean };
+  research: { configured: boolean; model?: string; pricingConfigured?: boolean; webSearch?: boolean; demoAvailable?: boolean; schedulerConfigured?: boolean };
   candidates: ResearchCandidate[];
   opportunities: Opportunity[];
   analytics: Analytics;
@@ -175,7 +183,7 @@ export type AppState = Omit<WorkspaceState, 'usage' | 'reservations' | 'manualQu
     quotes: {symbol:string;name:string;price:number|null;change:number|null;quoteAt?:string;source?:string;status?:string;history?:number[]}[];
     trend: SeriesPoint[];
   };
-  cost: {daily:number;monthly:number;requests:number;searches:number};
+  cost: {daily:number;monthly:number;requests:number;searches:number;dailyUnreconciled:number;monthlyUnreconciled:number;pending:number};
   manualQuotes: ContractQuote[];
   savedOpportunityIds: string[];
 };
@@ -229,7 +237,7 @@ function decimalSum(values: number[]) {
 export function portfolioAnalytics(portfolio: PaperTrade[]): Analytics {
   const closed = portfolio.filter((trade) => trade.status === 'closed');
   const exits = portfolio.flatMap((trade) => trade.exits.map((exit) => ({...exit, trade})))
-    .sort((a, b) => a.exitDate.localeCompare(b.exitDate));
+    .sort((a, b) => Date.parse(a.exitDate) - Date.parse(b.exitDate));
   const days = (entry: string, exit: string) => Math.floor((Date.parse(exit) - Date.parse(entry)) / 86400000);
   const duration = (trade: PaperTrade) => days(trade.entryDate, trade.exits.at(-1)?.exitDate ?? trade.entryDate);
   const wins = closed.filter((trade) => trade.realizedPnl > 0);
@@ -238,7 +246,7 @@ export function portfolioAnalytics(portfolio: PaperTrade[]): Analytics {
   const grossLosses = decimalSum(losses.map((trade) => trade.realizedPnl));
   const daily = new Map<string, Decimal>();
   for (const exit of exits) {
-    const date = exit.exitDate.slice(0, 10);
+    const date = new Date(exit.exitDate).toISOString().slice(0, 10);
     daily.set(date, (daily.get(date) ?? new Decimal(0)).plus(exit.realizedPnl));
   }
   let cumulative = new Decimal(0);
@@ -281,7 +289,7 @@ export function portfolioAnalytics(portfolio: PaperTrade[]): Analytics {
     byTicker: group(closed, (trade) => trade.symbol, (trade) => trade.realizedPnl),
     byStrategy: group(closed, (trade) => trade.strategy, (trade) => trade.realizedPnl),
     byHolding: group(closed, holdingBucket, (trade) => trade.realizedPnl),
-    byMonth: group(exits, (exit) => exit.exitDate.slice(0, 7), (exit) => exit.realizedPnl),
+    byMonth: group(exits, (exit) => new Date(exit.exitDate).toISOString().slice(0, 7), (exit) => exit.realizedPnl),
     scoreOutcomes: closed.flatMap((trade) => trade.researchScore == null ? [] :
       [{symbol:trade.symbol,score:trade.researchScore,pnl:trade.realizedPnl}]),
   };

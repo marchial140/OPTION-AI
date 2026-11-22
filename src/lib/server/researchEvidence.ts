@@ -30,9 +30,11 @@ const publishers: Record<string, string> = {
 export const trustedResearchDomains = Object.keys(publishers);
 
 const unsafeText = /ignore (?:all|prior|previous|the|your)|ignorez? (?:les|toutes)|system prompt|developer (?:message|instructions)|instructions? système|sk-(?:proj-)?[a-z0-9]{10,}|<\/?(?:script|iframe|system|developer|instruction)\b|javascript:|\bexfiltrat\w*|\b(?:garanti\w*|guarantee\w*)\b|\bsans (?:aucun )?risque\b|\brisk[- ]free\b|\b(?:insider tip|tuyau d['’]initié)\b/iu;
-const financialNumber = /(?:[$€£]\s*\d|\d(?:[\d ,.]*)\s*(?:[$€£%]|USD\b|CAD\b|EUR\b|dollars?\b|pour cent\b)|\b(?:prix|cote|cours|strike|bid|ask|prime|price|open interest|volatilité|volume)\s*(?:(?:de|à|est|at|of|is)\s+)?\d+\b)/iu;
+const standardReference = /\b(?:S\s*&\s*P\s*500|NASDAQ[-\s]+100|8-K|10-K|10-Q|3M|5G)\b/giu;
+const financialNumber = /[\p{Nd}$€£%]|\b(?:dollars?|euros?|percent|pour cent|points de base)\b/iu;
 
 function normalizeLink(value: string) {
+  if (typeof value !== "string" || value.length > 2048) return null;
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
@@ -58,7 +60,7 @@ export function cleanText(value: string, maxLength: number) {
 }
 
 export function checkNumericAssertion(text: string) {
-  return financialNumber.test(text);
+  return financialNumber.test(text.replace(standardReference, ""));
 }
 
 const sourceReferenceSchema = z.object({
@@ -140,7 +142,7 @@ export function gatherSources(response: Response, retrieval: Date) {
         for (const result of action.sources ?? []) add(result.url);
       } else if (action.url) add(action.url);
     }
-    if (item.type !== "message") continue;
+    if (item.type !== "message" || item.phase === "commentary" || item.status !== "completed") continue;
     for (const block of item.content) {
       if (block.type !== "output_text") continue;
       for (const annotation of block.annotations) {
@@ -154,19 +156,14 @@ export function gatherSources(response: Response, retrieval: Date) {
 export function boundSource(
   reference: SourceReference,
   sources: Map<string, EvidenceSource>,
-  now: Date,
 ) {
   const url = normalizeLink(reference.url);
-  const source = url ? sources.get(url) : null;
-  if (!source) return null;
-  const publication = reference.publishedAt;
-  const publishedAt = publication && z.iso.datetime({ offset: true }).safeParse(publication).success &&
-    Date.parse(publication) <= now.getTime() + 60_000 ? publication : undefined;
-  return { ...source, publishedAt };
+  // The search wire metadata confirms URLs and titles. Publication times in the model JSON remain provisional.
+  return url ? sources.get(url) ?? null : null;
 }
 
-export function boundClaim(claim: Claim, sources: Map<string, EvidenceSource>, now: Date) {
-  const source = boundSource(claim.source, sources, now);
+export function boundClaim(claim: Claim, sources: Map<string, EvidenceSource>) {
+  const source = boundSource(claim.source, sources);
   const text = cleanText(claim.text, 360);
   if (!source || !text || checkNumericAssertion(text)) return null;
   return { text, source };
@@ -176,7 +173,12 @@ export function mergeSources(sources: EvidenceSource[]) {
   const unique = new Map<string, EvidenceSource>();
   for (const source of sources) {
     const existing = unique.get(source.url);
-    unique.set(source.url, { ...existing, ...source });
+    unique.set(source.url, existing ? {
+      ...existing, ...source,
+      citation: source.citation ?? existing.citation,
+      publishedAt: source.publishedAt ?? existing.publishedAt,
+      quoteAt: source.quoteAt ?? existing.quoteAt,
+    } : source);
   }
   return [...unique.values()];
 }

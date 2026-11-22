@@ -1,6 +1,6 @@
 import Decimal from 'decimal.js';
 import { makeDemoFixtures } from '@/lib/demo';
-import { makeOccSymbol } from '@/lib/quant';
+import { makeOccSymbol, optionTradingCutoff } from '@/lib/quant';
 import { emptyWorkspace, type Mode, type PaperTrade } from '@/lib/workspace';
 
 const days = 86_400_000;
@@ -34,7 +34,11 @@ export function seedWorkspace(mode: Mode, now = new Date()) {
     if (!item) return [];
     const entryDate = new Date(now.getTime() - (35 - index * 4) * days).toISOString();
     const exitDate = new Date(now.getTime() - (30 - index * 4) * days).toISOString();
-    const expiration = new Date(Date.parse(entryDate) + 21 * days).toISOString().slice(0, 10);
+    const expirationDate = new Date(Date.parse(entryDate) + 21 * days);
+    while (optionTradingCutoff(expirationDate.toISOString().slice(0, 10)) === null) {
+      expirationDate.setUTCDate(expirationDate.getUTCDate() + 1);
+    }
+    const expiration = expirationDate.toISOString().slice(0, 10);
     const input = {
       ...item.input,
       fees: 1.3,

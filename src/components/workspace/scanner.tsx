@@ -5,8 +5,7 @@ import { useEffect, useState } from "react";
 import { Clock3, Download, History, LoaderCircle, Radio, ScanLine, Trash2 } from "lucide-react";
 import { strategyLabels } from "@/lib/quant";
 import type { AppState, Scan, ScanType, Settings } from "@/lib/workspace";
-import { actionForm, dataLabels, directionLabels, downloadJson, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, scanLabels, shortDate, Stat, Status, Submit, timestamp, useRequestKey } from "./ui";
-import { queryParameter } from "./strategy-lab";
+import { actionForm, dataLabels, dayInput, directionLabels, downloadJson, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, scanLabels, SourceLink, Stat, Status, Submit, timestamp, usePreparedRequest } from "./ui";
 
 const stageNames: Record<string, string> = {
   queued: "En file d’attente", research: "Recherche du sous-jacent", screening: "Sélection des candidats",
@@ -15,6 +14,7 @@ const stageNames: Record<string, string> = {
   completed: "Résultats enregistrés",
 };
 const scanModes = Object.keys(scanLabels) as ScanType[];
+type ScanRequest = { type: ScanType; tickers: string[]; overrides?: Partial<Settings> };
 const pendingScan = (scan: Scan) => scan.status === "queued" || scan.status === "running";
 const phaseOrder = ["queued", "research", "screening", "contracts", "discovering", "validation", "constructing", "ranking", "completed"];
 
@@ -37,13 +37,13 @@ function AssetEvidence({ scan }: { scan: Scan }) {
       <summary><strong>{candidate.symbol}</strong> · {candidate.name} · {directionLabels[candidate.direction]}</summary>
       <div className="wp-stack">
         <p>{candidate.thesis}</p>
-        <div className="wp-split"><span className="wp-micro">Cours de référence {money(candidate.price)}</span><Status value={candidate.status} dictionary={dataLabels} /></div>
+        <div className="wp-split"><span className="wp-micro">Cours de référence au moment du scan · {money(candidate.price)}</span><Status value={candidate.status} dictionary={dataLabels} /></div>
         {candidate.bullishFactors.length > 0 && <p><strong>Facteurs haussiers</strong> · {candidate.bullishFactors.join(" · ")}</p>}
         {candidate.bearishFactors.length > 0 && <p><strong>Facteurs baissiers</strong> · {candidate.bearishFactors.join(" · ")}</p>}
         {candidate.risks.length > 0 && <p><strong>Risques</strong> · {candidate.risks.join(" · ")}</p>}
         {!!candidate.sources.length && <ul className="wp-sources">
           {candidate.sources.map((source, index) => <li key={`${source.url}-${index}`}>
-            {source.url.startsWith("https://") && !source.url.includes(".invalid") ? <a href={source.url} target="_blank" rel="noreferrer">{source.publisher}</a> : source.publisher}
+            <SourceLink url={source.url}>{source.publisher}</SourceLink>
             {source.quoteAt && ` · Coté le ${timestamp(source.quoteAt)}`} · Consulté le {timestamp(source.retrievedAt)}
           </li>)}
         </ul>}
@@ -62,7 +62,7 @@ function ScanReport({ scan, showExport = false }: { scan: Scan; showExport?: boo
       {showExport && <button type="button" className="wp-button" onClick={() => downloadJson(`options-ai-pro-${scan.id}.json`, scan)}><Download size={15} /> Exporter ce scan</button>}
     </div>
     {running && <div className="wp-stack">
-      <p className="wp-micro" role="status"><LoaderCircle size={14} className="wp-spin" /> {scan.current ? scan.current + " · " : ""}{stageNames[scan.stage ?? ""] ?? scan.stage ?? "Préparation de l’analyse"}</p>
+      <p className="wp-micro wp-sort-status" role="status"><LoaderCircle size={14} className="wp-spin" /> {scan.current ? scan.current + " · " : ""}{stageNames[scan.stage ?? ""] ?? scan.stage ?? "Préparation de l’analyse"}</p>
       <progress className="wp-progress" aria-label="Actifs traités" max={scan.tickers.length || 1} value={processed} />
       <small className="wp-micro">{processed} / {scan.tickers.length} actifs traités</small>
     </div>}
@@ -75,8 +75,9 @@ function ScanReport({ scan, showExport = false }: { scan: Scan; showExport?: boo
       <Stat label="Coût estimé" value={money(scan.estimatedCost)} />
     </div>
     {scan.error && <Notice type="error">{scan.error}</Notice>}
-    {!running && scan.opportunities.length === 0 && <Notice>Aucune opportunité ne respecte actuellement vos critères.</Notice>}
-    {scan.opportunities.length > 0 && <Link className="wp-button" href="/opportunities">Consulter les opportunités</Link>}
+    {(scan.status === "completed" || scan.status === "partial") && scan.opportunities.length === 0 && <Notice>Aucune opportunité ne respecte actuellement vos critères.</Notice>}
+    {scan.status === "cancelled" && <Notice>Scan annulé. Les résultats enregistrés avant l’annulation restent accessibles ici.</Notice>}
+    {scan.status === "failed" && !scan.error && <Notice type="error">Le scan n’a pas abouti. Consultez les motifs du rapport avant de relancer.</Notice>}
     {scan.rejections.length > 0 && <details className="wp-card-row">
       <summary>{scan.rejections.length} résultat{scan.rejections.length > 1 ? "s" : ""} écarté{scan.rejections.length > 1 ? "s" : ""}</summary>
       <ul className="wp-sources">{scan.rejections.map((result, index) => <li key={`${result.symbol}-${index}`}><strong>{result.symbol}</strong> · {result.reason}</li>)}</ul>
@@ -88,25 +89,28 @@ function ScanReport({ scan, showExport = false }: { scan: Scan; showExport?: boo
     {!!scan.examinedSources?.length && <details className="wp-card-row">
       <summary>{scan.examinedSources.length} source(s) examinée(s)</summary>
       <ul className="wp-sources">{scan.examinedSources.map((source, index) => <li key={index}>
-        {source.url.startsWith("https://") && !source.url.includes(".invalid") ? <a href={source.url} target="_blank" rel="noreferrer">{source.publisher}</a> : source.publisher}
+        <SourceLink url={source.url}>{source.publisher}</SourceLink>
         {source.quoteAt && ` · Coté le ${timestamp(source.quoteAt)}`} · Consulté le {timestamp(source.retrievedAt)}
       </li>)}</ul>
     </details>}
     {showExport && !!scan.opportunities.length && <details className="wp-card-row">
-      <summary>Stratégies retenues lors de ce scan</summary>
+      <summary>{scan.opportunities.length} stratégie(s) retenue(s) lors de ce scan</summary>
       <ul className="wp-sources">{scan.opportunities.map((entry) => <li key={entry.id}>
         <Link href={`/opportunities/${encodeURIComponent(entry.id)}`}>{entry.symbol} · {strategyLabels[entry.strategy]}</Link> · Perte maximale {money(entry.result.maxLoss)}
+        {entry.score ? ` · Score ${entry.score.total}/100` : ""}
       </li>)}</ul>
     </details>}
     {scan.candidates.length > 0 && <AssetEvidence scan={scan} />}
   </>;
 }
 
-export function Scanner({ state, refresh }: { state: AppState; refresh: () => Promise<void> }) {
+export function Scanner({ state, refresh, symbol, listId }: {
+  state: AppState; refresh: () => Promise<void>; symbol?: string; listId?: string;
+}) {
+  const linkedList = listId ? state.watchlists.find((list) => list.id === listId) : state.watchlists[0];
   const [type, setType] = useState<ScanType>("quick");
-  const [initialTicker] = useState(() => queryParameter("symbol"));
-  const [selectedList, setSelectedList] = useState(initialTicker ? "" : state.watchlists[0]?.id ?? "");
-  const [symbols, setSymbols] = useState(() => initialTicker ?? state.watchlists[0]?.items.join(", ") ?? "");
+  const [selectedList, setSelectedList] = useState(symbol ? "" : linkedList?.id ?? "");
+  const [symbols, setSymbols] = useState(symbol?.toUpperCase() ?? linkedList?.items.join(", ") ?? "");
   const [minDte, setMinDte] = useState(String(state.settings.minDte));
   const [maxDte, setMaxDte] = useState(String(state.settings.maxDte));
   const [capital, setCapital] = useState(String(state.settings.accountCapital));
@@ -117,7 +121,7 @@ export function Scanner({ state, refresh }: { state: AppState; refresh: () => Pr
   const [pollPaused, setPollPaused] = useState(false);
   const [error, setError] = useState("");
   const [hasChanged, setHasChanged] = useState(false);
-  const requestKey = useRequestKey();
+  const prepared = usePreparedRequest<ScanRequest>();
   const scan = selectedScan ?? state.scans[0];
   const tickers = tickersFrom(symbols);
   const running = Boolean(selectedScan && pendingScan(selectedScan));
@@ -192,8 +196,8 @@ export function Scanner({ state, refresh }: { state: AppState; refresh: () => Pr
   const launch = async () => {
     setHasChanged(true);
     setError("");
-    if (!tickers.length) {
-      setError("Ajoutez au moins un symbole avant de lancer l’analyse.");
+    if (!tickers.length || tickers.length > 20) {
+      setError("Sélectionnez entre 1 et 20 symboles par analyse.");
       return;
     }
     if (type === "custom" && (Number(minDte) > Number(maxDte) || !strategies.length)) {
@@ -206,8 +210,9 @@ export function Scanner({ state, refresh }: { state: AppState; refresh: () => Pr
         minDte: Number(minDte), maxDte: Number(maxDte), accountCapital: Number(capital), riskPerTrade: Number(risk), strategies,
       } : undefined;
       const payload = { type, tickers, overrides };
-      const response = await request<{ scan: Scan }>("/api/scans", "POST", payload, requestKey.get(payload));
-      requestKey.clear();
+      const { body, key } = prepared.get(payload, () => payload);
+      const response = await request<{ scan: Scan }>("/api/scans", "POST", body, key);
+      prepared.clear();
       setPollPaused(false);
       setSelectedScan(response.scan);
       void refresh();
@@ -234,7 +239,9 @@ export function Scanner({ state, refresh }: { state: AppState; refresh: () => Pr
             const list = state.watchlists.find((item) => item.id === event.target.value);
             if (list) setSymbols(list.items.join(", "));
           }}><option value="">Saisie libre</option>{state.watchlists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}</select></Field>
-          <Field label="Symboles" hint="Séparez les symboles par des virgules ou des espaces."><textarea value={symbols} onChange={(event) => { setSymbols(event.target.value.toUpperCase()); setSelectedList(""); }} rows={3} required maxLength={300} /></Field>
+          {listId && !linkedList && <Notice type="error">La liste liée est introuvable. Choisissez une liste ou saisissez des symboles.</Notice>}
+          <Field label="Symboles" hint="20 symboles maximum, séparés par des virgules ou des espaces."><textarea value={symbols} onChange={(event) => { setSymbols(event.target.value.toUpperCase()); setSelectedList(""); }} rows={3} required maxLength={720} /></Field>
+          <p className="wp-micro">{tickers.length} / 20 symboles</p>
           {type === "custom" && <div className="wp-fields">
             <Field label="Échéance minimale (jours)"><input min={state.settings.minDte} max={state.settings.maxDte} type="number" required value={minDte} onChange={(event) => setMinDte(event.target.value)} /></Field>
             <Field label="Échéance maximale (jours)"><input min={state.settings.minDte} max={state.settings.maxDte} type="number" required value={maxDte} onChange={(event) => setMaxDte(event.target.value)} /></Field>
@@ -266,14 +273,15 @@ export function Scanner({ state, refresh }: { state: AppState; refresh: () => Pr
 export function HistoryPage({ state, refresh }: { state: AppState; refresh: () => Promise<void> }) {
   const [symbol, setSymbol] = useState("");
   const [minDate, setMinDate] = useState("");
+  const [maxDate, setMaxDate] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [comparedId, setComparedId] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const query = symbol.trim().toLowerCase();
-  const visible = state.scans.filter((scan) => (!minDate || scan.startedAt.slice(0, 10) >= minDate) &&
-    (!query || scan.tickers.some((ticker) => ticker.toLowerCase().includes(query)) ||
+  const visible = state.scans.filter((scan) => (!minDate || dayInput(new Date(scan.startedAt)) >= minDate) &&
+    (!maxDate || dayInput(new Date(scan.startedAt)) <= maxDate) && (!query || scan.tickers.some((ticker) => ticker.toLowerCase().includes(query)) ||
       scan.id.toLowerCase().includes(query) || scanLabels[scan.type].toLowerCase().includes(query)));
   const selected = visible.find((scan) => scan.id === selectedId) ?? visible[0];
   const compared = state.scans.find((scan) => scan.id === comparedId && scan.id !== selected?.id);
@@ -297,11 +305,12 @@ export function HistoryPage({ state, refresh }: { state: AppState; refresh: () =
     <div className="wp-grid">
       <Panel title="Archives des scans" detail={visible.length + " scan(s) trouvé(s)"}>
         <div className="wp-fields">
-          <Field label="Rechercher un scan"><input type="search" placeholder="Symbole ou mode" value={symbol} onChange={(event) => setSymbol(event.target.value)} /></Field>
-          <Field label="À partir du"><input type="date" value={minDate} onChange={(event) => setMinDate(event.target.value)} /></Field>
+          <Field label="Rechercher un scan" wide><input type="search" placeholder="Symbole, mode ou identifiant" value={symbol} onChange={(event) => setSymbol(event.target.value)} /></Field>
+          <Field label="À partir du"><input type="date" max={maxDate || undefined} value={minDate} onChange={(event) => setMinDate(event.target.value)} /></Field>
+          <Field label="Jusqu’au"><input type="date" min={minDate || undefined} value={maxDate} onChange={(event) => setMaxDate(event.target.value)} /></Field>
         </div>
         {visible.map((scan) => <button type="button" key={scan.id} className="wp-button wp-split" aria-pressed={scan.id === selected?.id} onClick={() => { setSelectedId(scan.id); setConfirmDelete(null); }}>
-          <span className="wp-actions"><Clock3 size={15} /> {shortDate(scan.startedAt)} · {scanLabels[scan.type]}</span><Status value={scan.status} />
+          <span className="wp-actions"><Clock3 size={15} /> {timestamp(scan.startedAt)} · {scanLabels[scan.type]}</span><Status value={scan.status} />
         </button>)}
         {!visible.length && <Empty title="Aucun résultat" detail={state.scans.length ? "Modifiez les filtres pour retrouver un autre scan." : "Les scans enregistrés apparaîtront ici."}><Link href="/scanner" className="wp-button">Ouvrir le scanner</Link></Empty>}
       </Panel>
@@ -319,12 +328,13 @@ export function HistoryPage({ state, refresh }: { state: AppState; refresh: () =
           <Field label="Scan de comparaison"><select value={compared ? comparedId : ""} onChange={(event) => setComparedId(event.target.value)}>
             <option value="">Choisir un autre scan</option>{state.scans.filter((scan) => scan.id !== selected.id).map((scan) => <option value={scan.id} key={scan.id}>{timestamp(scan.startedAt)} · {scanLabels[scan.type]}</option>)}
           </select></Field>
-          {compared && <div className="wp-table-wrap"><table className="wp-table"><thead><tr><th>Symbole</th><th>{shortDate(selected.startedAt)}</th><th>{shortDate(compared.startedAt)}</th></tr></thead>
-            <tbody>{[...new Set([...selected.tickers, ...compared.tickers])].map((ticker) => {
-              const current = selected.candidates.find((item) => item.symbol === ticker);
-              const other = compared.candidates.find((item) => item.symbol === ticker);
-              return <tr key={ticker}><td>{ticker}</td><td>{current ? directionLabels[current.direction] : "—"}</td><td>{other ? directionLabels[other.direction] : "—"}</td></tr>;
-            })}</tbody>
+          {compared && <div className="wp-table-wrap"><table className="wp-table wp-wrap-table"><thead><tr><th>Symbole</th><th>{timestamp(selected.startedAt)}</th><th>{timestamp(compared.startedAt)}</th></tr></thead>
+            <tbody>{[...new Set([...selected.tickers, ...compared.tickers])].map((ticker) => <tr key={ticker}><th scope="row">{ticker}</th>
+              {[selected, compared].map((scan) => {
+                const candidate = scan.candidates.find((item) => item.symbol === ticker);
+                return <td key={scan.id}>{candidate ? <><strong>{directionLabels[candidate.direction]}</strong><small>{candidate.thesis}</small></> : "Aucune conclusion"}</td>;
+              })}
+            </tr>)}</tbody>
           </table></div>}
         </Panel>}
       </div>

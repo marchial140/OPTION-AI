@@ -43,3 +43,7 @@ The score is a weighted average on a 0–100 scale. The strategy can remain vali
 An expiration payoff uses intrinsic value at a hypothetical underlying price. A reference mark requires supported market inputs. Paper entry debit and exit credit are in total position dollars for the recorded quantity. Exit P&L subtracts closing fees and the allocated share of the opening debit and fees from the exit credit. Partial exits use cumulative cent allocation so that a fully closed trade reconciles to the original opening cost.
 
 The stated maximum spread loss assumes the legs remain intact through settlement. Early assignment, exercise, pin risk, and broker processing can create operational exposure beyond the payoff chart model.
+
+Contract eligibility uses the supported regular-session cutoff in New York, including modeled early closes. A cited spread uses leg observations no more than five minutes apart. The calculator continues to accept explicitly hypothetical inputs for scenario analysis.
+
+A paper spread may close at a net debit when the user records a simulated execution. Debit exits reduce realized P&L. A long-only exit requires a nonnegative credit. Daily and monthly realized-P&L groups use UTC.

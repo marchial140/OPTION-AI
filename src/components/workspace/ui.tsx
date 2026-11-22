@@ -20,7 +20,7 @@ export const directionLabels: Record<string, string> = {
   bullish: "Haussier", bearish: "Baissier", neutral: "Neutre", mixed: "Mitigé", insufficient: "Données insuffisantes",
 };
 export const dataLabels: Record<string, string> = {
-  DEMO: "Fictif", VERIFIED_FRESH: "Vérifié · récent", VERIFIED_DELAYED: "Vérifié · différé",
+  DEMO: "Fictif", MANUAL_ATTESTED: "Attestée · indicative", VERIFIED_FRESH: "Vérifié · récent", VERIFIED_DELAYED: "Vérifié · différé",
   VERIFIED_HISTORICAL: "Vérifié · historique", STALE: "Périmé", UNVERIFIED: "Non vérifié",
   INSUFFICIENT: "Insuffisant", CONTRADICTORY: "Contradictoire",
 };
@@ -75,8 +75,23 @@ export function Notice({ children, type = "info" }: { children: ReactNode; type?
 export function Status({ value, dictionary = statusLabels }: { value: string; dictionary?: Record<string, string> }) {
   const tone = ["completed", "closed", "VERIFIED_FRESH", "bullish"].includes(value) ? "good" :
     ["failed", "CONTRADICTORY", "bearish"].includes(value) ? "bad" :
-    ["partial", "running", "pending", "queued", "VERIFIED_DELAYED", "STALE"].includes(value) ? "warn" : "neutral";
+    ["partial", "running", "pending", "queued", "VERIFIED_DELAYED", "MANUAL_ATTESTED", "STALE"].includes(value) ? "warn" : "neutral";
   return <span className={`wp-status wp-status-${tone}`}><i />{dictionary[value] ?? value}</span>;
+}
+
+function isLinkableSource(url: string) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.hostname.endsWith(".invalid");
+  } catch {
+    return false;
+  }
+}
+
+export function SourceLink({ url, children }: { url: string; children: ReactNode }) {
+  if (url === "/settings#data-sources") return <a href={url}>{children}</a>;
+  if (isLinkableSource(url)) return <a href={url} target="_blank" rel="noreferrer">{children}</a>;
+  return <>{children}</>;
 }
 
 export function Stat({ label, value, hint, tone = "" }: { label: string; value: ReactNode; hint?: string; tone?: string }) {
@@ -89,13 +104,19 @@ export function Submit({ children, pending, disabled }: { children: ReactNode; p
   </button>;
 }
 
-export function useRequestKey() {
-  const pending = useRef<{ fingerprint: string; key: string } | null>(null);
+export function newRequestId() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function usePreparedRequest<Payload>() {
+  const pending = useRef<{ fingerprint: string; key: string; body: Payload } | null>(null);
   return {
-    get(input: unknown) {
+    get(input: unknown, prepare: () => Payload) {
       const fingerprint = JSON.stringify(input);
-      if (pending.current?.fingerprint !== fingerprint) pending.current = { fingerprint, key: crypto.randomUUID() };
-      return pending.current.key;
+      if (!pending.current || pending.current.fingerprint !== fingerprint) {
+        pending.current = { fingerprint, key: newRequestId(), body: prepare() };
+      }
+      return pending.current;
     },
     clear() {
       pending.current = null;
@@ -104,15 +125,20 @@ export function useRequestKey() {
 }
 
 export async function request<T = Record<string, unknown>>(url: string, method = "GET", body?: unknown, requestKey?: string): Promise<T> {
-  const response = await fetch(url, {
-    method,
-    cache: "no-store",
-    headers: {
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      ...(requestKey ? { "Idempotency-Key": requestKey } : {}),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      cache: "no-store",
+      headers: {
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(requestKey ? { "Idempotency-Key": requestKey } : {}),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  } catch {
+    throw new Error("La connexion a échoué. Réessayez dans un instant.");
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const error = data?.error;

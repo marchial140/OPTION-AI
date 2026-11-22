@@ -1,5 +1,6 @@
 import Decimal from 'decimal.js';
 import { z } from 'zod';
+import { marketSession } from './server/market';
 
 export const strategyLabels = {
   long_call: 'Achat de call',
@@ -13,7 +14,7 @@ export type Strategy = z.infer<typeof strategySchema>;
 
 export const dataStatusSchema = z.enum([
   'VERIFIED_FRESH', 'VERIFIED_DELAYED', 'VERIFIED_HISTORICAL', 'UNVERIFIED',
-  'STALE', 'INSUFFICIENT', 'CONTRADICTORY', 'DEMO',
+  'STALE', 'INSUFFICIENT', 'CONTRADICTORY', 'DEMO', 'MANUAL_ATTESTED',
 ]);
 export type DataStatus = z.infer<typeof dataStatusSchema>;
 export type Direction = 'bullish' | 'bearish' | 'neutral' | 'mixed' | 'insufficient';
@@ -182,18 +183,36 @@ const dateInNewYork = new Intl.DateTimeFormat('en-CA', {
 });
 const dayMs = 86_400_000;
 const minuteMs = 60_000;
+const maximumLegTimeGap = 5 * minuteMs;
 
 export function daysToExpiration(expiration: string, now = new Date()): number {
+  if (!Number.isFinite(now.getTime())) return Number.NaN;
   const dateParts = Object.fromEntries(dateInNewYork.formatToParts(now).map(({ type, value }) => [type, value]));
   return Math.round((Date.parse(expiration) - Date.parse(`${dateParts.year}-${dateParts.month}-${dateParts.day}`)) / dayMs);
 }
 
+export function optionTradingCutoff(expiration: string): number | null {
+  if (!z.iso.date().safeParse(expiration).success) return null;
+  const probe = new Date(`${expiration}T16:00:00.000Z`);
+  const session = marketSession(probe);
+  if (!session.optionsOpen) return null;
+  const [hour, minute] = session.time.split(':').map(Number);
+  const closeHour = session.earlyClose ? 13 : 16;
+  return probe.getTime() + ((closeHour - hour) * 60 - minute) * minuteMs;
+}
+
+export function quotesAreSynchronized(legs: Pick<ContractQuote, 'quoteAt'>[]): boolean {
+  const times = legs.map(({ quoteAt }) => Date.parse(quoteAt));
+  return times.length > 0 && times.every(Number.isFinite) && Math.max(...times) - Math.min(...times) <= maximumLegTimeGap;
+}
+
 export function makeOccSymbol(symbol: string, expiration: string, type: 'call' | 'put', strike: number): string {
   const units = new Decimal(strike).times(1_000);
-  if (!/^[A-Z0-9]{1,6}$/.test(symbol) || !z.iso.date().safeParse(expiration).success || !units.isInteger() || units.lte(0) || units.gt(99_999_999)) {
+  const root = symbol.replace(/^([A-Z0-9]+)\.([A-Z])$/, '$1$2');
+  if (!/^[A-Z0-9]{1,6}$/.test(root) || !z.iso.date().safeParse(expiration).success || !units.isInteger() || units.lte(0) || units.gt(99_999_999)) {
     throw new Error('L’identité OCC ne correspond pas à un contrat standard.');
   }
-  return `${symbol}${expiration.slice(2).replaceAll('-', '')}${type === 'call' ? 'C' : 'P'}${units.toFixed(0).padStart(8, '0')}`;
+  return `${root}${expiration.slice(2).replaceAll('-', '')}${type === 'call' ? 'C' : 'P'}${units.toFixed(0).padStart(8, '0')}`;
 }
 
 function validateContractTerms(quote: ContractQuote) {
@@ -214,10 +233,14 @@ export function validateQuote(quote: ContractQuote, expectedSymbol = quote.symbo
     return { valid: false, status: 'CONTRADICTORY', reason: (error as Error).message };
   }
   if (quote.symbol !== expectedSymbol) return { valid: false, status: 'CONTRADICTORY', reason: 'Le sous-jacent de la cotation est incorrect.' };
-  if (daysToExpiration(quote.expiration, now) < 0) return { valid: false, status: 'VERIFIED_HISTORICAL', reason: 'Le contrat a expiré.' };
+  const cutoff = optionTradingCutoff(quote.expiration);
+  if (cutoff === null) return { valid: false, status: 'CONTRADICTORY', reason: 'L’échéance tombe sur une journée sans séance d’options.' };
+
+  const userAttested = quote.status === 'MANUAL_ATTESTED' || (quote.status === 'VERIFIED_DELAYED' && quote.source.method === 'manual-broker');
+  const qualified = quote.status === 'VERIFIED_FRESH' || quote.status === 'VERIFIED_DELAYED';
 
   try {
-    const validDemoUrl = quote.status === 'DEMO' && quote.source.url.startsWith('/') && !quote.source.url.startsWith('//');
+    const validDemoUrl = quote.status === 'DEMO' && /^\/(?![\\/])/.test(quote.source.url);
     if (!validDemoUrl) {
       const source = new URL(quote.source.url);
       if (source.protocol !== 'https:' || source.username || source.password) throw new Error();
@@ -229,14 +252,19 @@ export function validateQuote(quote: ContractQuote, expectedSymbol = quote.symbo
   const quoteTime = Date.parse(quote.quoteAt);
   const retrieved = Date.parse(quote.retrievedAt);
   const age = now.getTime() - quoteTime;
-  if (quoteTime > retrieved + minuteMs || retrieved > now.getTime() + minuteMs || age < -minuteMs) {
+  if (!Number.isFinite(age) || quoteTime > cutoff || quoteTime > retrieved + minuteMs || retrieved > now.getTime() + minuteMs || age < -minuteMs) {
     return { valid: false, status: 'CONTRADICTORY', reason: 'Horodatage de la cotation incohérent.' };
   }
+  if (now.getTime() >= cutoff) {
+    const status = userAttested ? 'STALE' : qualified ? 'VERIFIED_HISTORICAL' : quote.status;
+    return { valid: false, status, reason: 'La séance régulière de l’échéance est terminée.' };
+  }
   if (quote.status === 'DEMO') return { valid: true, status: 'DEMO' };
-  if (quote.status !== 'VERIFIED_FRESH' && quote.status !== 'VERIFIED_DELAYED') {
+  if (!qualified && !userAttested) {
     return { valid: false, status: quote.status, reason: 'La provenance ou la fraîcheur de la cotation ne permet pas son classement.' };
   }
   if (age > 36 * 60 * minuteMs) return { valid: false, status: 'STALE', reason: 'La cotation a plus de 36 heures.' };
+  if (userAttested) return { valid: true, status: 'MANUAL_ATTESTED' };
   return { valid: true, status: age > 15 * minuteMs ? 'VERIFIED_DELAYED' : quote.status };
 }
 
@@ -261,7 +289,7 @@ function strategyTerms(input: StrategyInput) {
   if (width?.lte(netDebit) || (!isCall && !isVertical && netDebit.gte(long.strike))) {
     throw new Error('Le débit atteint ou dépasse la valeur maximale à l’échéance.');
   }
-  return { long, short, isCall, width, netDebit, exposure: new Decimal(long.multiplier).times(input.quantity) };
+  return { long, isCall, width, netDebit, exposure: new Decimal(long.multiplier).times(input.quantity) };
 }
 
 export function calculateStrategy(input: StrategyInput): StrategyResult {
@@ -273,6 +301,8 @@ export function calculateStrategy(input: StrategyInput): StrategyResult {
   const maxProfit = maxIntrinsic?.times(exposure).minus(totalCost) ?? null;
   const breakEven = maxProfit?.lt(0) ? null : new Decimal(long.strike).plus(perShareCost.times(isCall ? 1 : -1));
   const rewardRisk = maxProfit?.div(totalCost) ?? null;
+  const returnOnRisk = rewardRisk?.times(100).toNumber() ?? null;
+  if (returnOnRisk !== null && !Number.isFinite(returnOnRisk)) throw new Error('Le rapport rendement / risque dépasse la plage de calcul prise en charge.');
   return {
     entryDebit: entryDebit.toNumber(),
     positionCost: totalCost.toNumber(),
@@ -280,7 +310,7 @@ export function calculateStrategy(input: StrategyInput): StrategyResult {
     maxProfit: maxProfit?.toNumber() ?? null,
     breakEven: breakEven?.toNumber() ?? null,
     rewardRisk: rewardRisk?.toNumber() ?? null,
-    returnOnRisk: rewardRisk?.times(100).toNumber() ?? null,
+    returnOnRisk,
     netDebitPerShare: netDebit.toNumber(),
     fees: input.fees,
     multiplier: long.multiplier,
@@ -289,9 +319,11 @@ export function calculateStrategy(input: StrategyInput): StrategyResult {
 }
 
 function calculatePayoff(input: StrategyInput, terms: ReturnType<typeof strategyTerms>, underlying: Decimal) {
-  const { long, short, isCall, netDebit, exposure } = terms;
-  const intrinsic = (strike: number) => Decimal.max(underlying.minus(strike).times(isCall ? 1 : -1), 0);
-  return intrinsic(long.strike).minus(short ? intrinsic(short.strike) : 0).minus(netDebit).times(exposure).minus(input.fees).toNumber();
+  const { long, isCall, width, netDebit, exposure } = terms;
+  const longIntrinsic = Decimal.max(underlying.minus(long.strike).times(isCall ? 1 : -1), 0);
+  const payoff = (width === null ? longIntrinsic : Decimal.min(longIntrinsic, width)).minus(netDebit).times(exposure).minus(input.fees).toNumber();
+  if (!Number.isFinite(payoff)) throw new Error('Le résultat dépasse la plage de calcul prise en charge.');
+  return payoff;
 }
 
 export function payoffAt(input: StrategyInput, underlying: number): number {
@@ -328,21 +360,28 @@ export function assessRisk(input: StrategyInput, result: StrategyResult, prefere
   const reasons: string[] = [];
   const warnings: string[] = [];
   const currentRisk = context.existingRisk ?? 0;
-  const invalidLimits = !Number.isFinite(prefs.capital) || prefs.capital < 0 || !Number.isFinite(prefs.maxRiskPercent) || prefs.maxRiskPercent < 0 || prefs.maxRiskPercent > 100 || !Number.isFinite(prefs.maxPortfolioRiskPercent) || prefs.maxPortfolioRiskPercent < 0 || prefs.maxPortfolioRiskPercent > 100 || !Number.isFinite(currentRisk) || currentRisk < 0;
+  const openPositions = context.openPositions ?? 0;
+  const percentage = (value: number) => Number.isFinite(value) && value >= 0 && value <= 100;
+  const nonnegativeInteger = (value: number) => Number.isSafeInteger(value) && value >= 0;
+  const invalidLimits = !Number.isFinite(prefs.capital) || prefs.capital < 0 || !Number.isFinite(currentRisk) || currentRisk < 0
+    || ![prefs.maxRiskPercent, prefs.maxPortfolioRiskPercent, prefs.maxSpreadPercent].every(percentage)
+    || ![prefs.maxContracts, prefs.maxPositions, prefs.minDte, prefs.maxDte, prefs.minVolume, prefs.minOpenInterest, openPositions].every(nonnegativeInteger)
+    || prefs.minDte > prefs.maxDte;
   if (invalidLimits) {
     return { eligible: false, reasons: ['Les paramètres de capital ou de risque sont non valides.'], warnings, maxTradeLoss: 0, remainingPortfolioRisk: 0 };
   }
-  const maxTradeLoss = new Decimal(prefs.capital).times(prefs.maxRiskPercent).div(100).toNumber();
-  const remainingPortfolioRisk = Decimal.max(0, new Decimal(prefs.capital).times(prefs.maxPortfolioRiskPercent).div(100).minus(currentRisk)).toNumber();
-  if (!Number.isFinite(result.maxLoss) || result.maxLoss <= 0) reasons.push('Perte maximale indisponible.');
+  const capital = new Decimal(prefs.capital);
+  const maxTradeLoss = capital.times(prefs.maxRiskPercent).div(100);
+  const remainingPortfolioRisk = Decimal.max(0, capital.times(prefs.maxPortfolioRiskPercent).div(100).minus(currentRisk));
+  if (!Number.isFinite(result.maxLoss) || result.maxLoss <= 0 || !Number.isFinite(result.positionCost) || result.positionCost <= 0) reasons.push('Perte maximale indisponible.');
   else {
-    if (result.maxLoss > maxTradeLoss) reasons.push(`La perte maximale dépasse le plafond de ${money(maxTradeLoss)} par opération.`);
-    if (result.maxLoss > remainingPortfolioRisk) reasons.push(`L’exposition cumulée dépasserait le plafond du portefeuille.`);
-    if (result.positionCost > Math.max(0, prefs.capital - currentRisk)) reasons.push('Le capital disponible est insuffisant.');
+    if (maxTradeLoss.lt(result.maxLoss)) reasons.push(`La perte maximale dépasse le plafond de ${money(maxTradeLoss.toNumber())} par opération.`);
+    if (remainingPortfolioRisk.lt(result.maxLoss)) reasons.push('L’exposition cumulée dépasserait le plafond du portefeuille.');
+    if (Decimal.max(0, capital.minus(currentRisk)).lt(result.positionCost)) reasons.push('Le capital disponible est insuffisant.');
   }
   if (!prefs.strategies.includes(input.strategy)) reasons.push('Cette stratégie est exclue des préférences.');
   if (input.quantity > prefs.maxContracts) reasons.push('Le nombre de contrats dépasse le maximum autorisé.');
-  if ((context.openPositions ?? 0) >= prefs.maxPositions) reasons.push('Le nombre maximal de positions est atteint.');
+  if (openPositions >= prefs.maxPositions) reasons.push('Le nombre maximal de positions est atteint.');
   if (result.maxProfit !== null && result.maxProfit <= 0) reasons.push('Aucun profit net possible à l’échéance avec les frais indiqués.');
 
   const expiration = input.legs[0]?.expiration;
@@ -366,16 +405,30 @@ export function assessRisk(input: StrategyInput, result: StrategyResult, prefere
     if (!checked.valid) reasons.push(`${leg.id} · ${checked.reason}`);
     else if (checked.status === 'DEMO' && !context.allowDemo) reasons.push('Une cotation fictive est exclue de la recherche en direct.');
     else if (checked.status === 'VERIFIED_DELAYED') warnings.push('Cotation différée, prix indicatif.');
+    else if (checked.status === 'MANUAL_ATTESTED') warnings.push('Cotation courtier saisie et attestée par l’utilisateur, prix indicatif.');
     if (prefs.minVolume > 0 && (leg.volume === undefined || leg.volume < prefs.minVolume)) reasons.push(`${leg.id} · volume insuffisant ou indisponible.`);
     if (prefs.minOpenInterest > 0 && (leg.openInterest === undefined || leg.openInterest < prefs.minOpenInterest)) reasons.push(`${leg.id} · intérêt ouvert insuffisant ou indisponible.`);
     if (leg.ask === 0 || spreadPercent(leg) > prefs.maxSpreadPercent) reasons.push(`${leg.id} · écart bid/ask supérieur au seuil.`);
     else if (spreadPercent(leg) >= 10) warnings.push(`${leg.id} · écart bid/ask élevé.`);
   }
-  if (input.legs.length > 1) warnings.push('Le risque à l’échéance suppose que le spread reste intact. Une assignation anticipée ou une clôture partielle des jambes peut modifier l’exposition.');
-  return { eligible: reasons.length === 0, reasons: [...new Set(reasons)], warnings: [...new Set(warnings)], maxTradeLoss, remainingPortfolioRisk };
+  if (input.legs.length > 1) {
+    if (!quotesAreSynchronized(input.legs)) reasons.push('Les cotations des jambes sont espacées de plus de cinq minutes.');
+    if (input.legs.some((leg) => leg.status === 'DEMO') && input.legs.some((leg) => leg.status !== 'DEMO')) reasons.push('Les jambes mélangent cotations fictives et réelles.');
+    warnings.push('Le risque à l’échéance suppose que le spread reste intact. Une assignation anticipée ou une clôture partielle des jambes peut modifier l’exposition.');
+  }
+  return { eligible: reasons.length === 0, reasons: [...new Set(reasons)], warnings: [...new Set(warnings)], maxTradeLoss: maxTradeLoss.toNumber(), remainingPortfolioRisk: remainingPortfolioRisk.toNumber() };
 }
 
 const defaultWeights: Record<ScoreKey, number> = { liquidity: 30, payoff: 25, direction: 20, execution: 15, quality: 10 };
+
+export function opportunityQuoteStatus(legs: Pick<ContractQuote, 'status'>[]): DataStatus {
+  if (!legs.length) return 'INSUFFICIENT';
+  if (legs.every(({ status }) => status === 'DEMO')) return 'DEMO';
+  if (legs.some(({ status }) => status !== 'MANUAL_ATTESTED' && status !== 'VERIFIED_DELAYED' && status !== 'VERIFIED_FRESH')) return 'UNVERIFIED';
+  if (legs.some(({ status }) => status === 'MANUAL_ATTESTED')) return 'MANUAL_ATTESTED';
+  if (legs.some(({ status }) => status === 'VERIFIED_DELAYED')) return 'VERIFIED_DELAYED';
+  return 'VERIFIED_FRESH';
+}
 
 export function scoreOpportunity(input: StrategyInput, result: StrategyResult, direction: Direction, weights: ScoreWeights = {}): ScoreResult | null {
   const optionVolumes = input.legs.map(({ volume, openInterest }) => [volume, openInterest] as const);
@@ -390,16 +443,16 @@ export function scoreOpportunity(input: StrategyInput, result: StrategyResult, d
   const widestSpread = Math.max(...input.legs.map(spreadPercent));
   const bullish = input.strategy === 'long_call' || input.strategy === 'bull_call';
   const aligned = direction === (bullish ? 'bullish' : 'bearish');
-  const qualified = input.legs.every(({ status }) => status === 'VERIFIED_FRESH' || status === 'VERIFIED_DELAYED' || status === 'DEMO');
-  if (!qualified) return null;
-  const quality = input.legs.some(({ status }) => status === 'VERIFIED_DELAYED') ? 65 : 100;
+  const sourceStatus = opportunityQuoteStatus(input.legs);
+  if (sourceStatus === 'UNVERIFIED' || sourceStatus === 'INSUFFICIENT' || !quotesAreSynchronized(input.legs)) return null;
+  const quality = sourceStatus === 'VERIFIED_DELAYED' || sourceStatus === 'MANUAL_ATTESTED' ? 65 : 100;
 
   const components: [ScoreKey, string, number, string][] = [
     ['liquidity', 'Liquidité', Math.min(...liquidities), 'Volume et intérêt ouvert de la jambe la moins liquide, plafonnés à 500 et 1 500.'],
     ['payoff', 'Profil rendement / risque', Math.min(result.rewardRisk / 2.5, 1) * 100, 'Rapport entre le meilleur résultat net à l’échéance et la perte maximale, plafonné à 2,5.'],
     ['direction', 'Cohérence directionnelle', aligned ? 100 : direction === 'mixed' ? 50 : direction === 'neutral' ? 35 : 0, 'Alignement de la stratégie sur la direction de la thèse de recherche.'],
     ['execution', 'Efficacité indicative', Math.max(0, 100 - widestSpread * 3), 'Pénalité de trois points par point de pourcentage de l’écart bid/ask le plus large.'],
-    ['quality', 'Qualité des données', quality, 'Classification de fraîcheur de la jambe la moins récente. En démo, cette qualité est simulée.'],
+    ['quality', 'Qualité des données', quality, 'Fraîcheur et provenance des jambes. Les cotations différées ou attestées manuellement réduisent ce score. En démo, la qualité est simulée.'],
   ];
   const breakdown = components.map(([key, label, value, reason]) => ({ key, label, value: Math.round(value), weight: mergedWeights[key] * 100 / weightTotal, reason }));
   return { total: Math.round(breakdown.reduce((sum, row) => sum + row.value * row.weight / 100, 0)), breakdown };
@@ -414,7 +467,7 @@ export function constructStrategies(quotes: ContractQuote[], preferences: RiskPr
   const opportunities: Opportunity[] = [];
   const reasons = new Set<string>();
   const uniqueQuotes = new Map<string, ContractQuote>();
-  const conflicting = new Set<string>();
+  const conflicting = new Map<string, number>();
   for (const quote of quotes.slice(0, 48)) {
     const validation = validateQuote(quote, candidate.symbol, now);
     if (!validation.valid) {
@@ -423,17 +476,22 @@ export function constructStrategies(quotes: ContractQuote[], preferences: RiskPr
     }
     const normalized = { ...quote, id: makeOccSymbol(quote.symbol, quote.expiration, quote.type, quote.strike), status: validation.status };
     const existing = uniqueQuotes.get(normalized.id);
-    if (existing && JSON.stringify(existing) !== JSON.stringify(normalized)) {
-      const sameTime = existing.quoteAt === normalized.quoteAt;
-      if (sameTime && (existing.bid !== normalized.bid || existing.ask !== normalized.ask || (existing.status === 'DEMO') !== (normalized.status === 'DEMO'))) {
-        conflicting.add(normalized.id);
+    if (existing) {
+      const time = Date.parse(normalized.quoteAt);
+      const previousTime = Date.parse(existing.quoteAt);
+      if (previousTime > time) continue;
+      if (previousTime === time && (existing.bid !== normalized.bid || existing.ask !== normalized.ask || (existing.status === 'DEMO') !== (normalized.status === 'DEMO'))) {
+        conflicting.set(normalized.id, time);
         reasons.add(`${normalized.id} · cotations contradictoires au même horodatage.`);
       }
-      if (Date.parse(existing.quoteAt) > Date.parse(normalized.quoteAt)) continue;
+      if (previousTime === time && Date.parse(existing.retrievedAt) > Date.parse(normalized.retrievedAt)) continue;
     }
     uniqueQuotes.set(normalized.id, normalized);
   }
-  for (const id of conflicting) uniqueQuotes.delete(id);
+  for (const [id, time] of conflicting) {
+    const selected = uniqueQuotes.get(id);
+    if (selected && Date.parse(selected.quoteAt) === time) uniqueQuotes.delete(id);
+  }
   if (uniqueQuotes.size === 0) reasons.add('Aucune cotation d’option vérifiée et exploitable pour cette recherche.');
 
   const quoteList = [...uniqueQuotes.values()];
@@ -453,7 +511,7 @@ export function constructStrategies(quotes: ContractQuote[], preferences: RiskPr
           for (const reason of risk.reasons) reasons.add(reason);
           continue;
         }
-        const status = long.status === 'DEMO' ? 'DEMO' : legs.some((leg) => leg.status === 'VERIFIED_DELAYED') ? 'VERIFIED_DELAYED' : 'VERIFIED_FRESH';
+        const status = opportunityQuoteStatus(legs);
         opportunities.push({
           id: `${strategy}-${legs.map(({ id }) => id).join('-')}`, symbol: candidate.symbol, name: candidate.name, price: candidate.price,
           direction: candidate.direction, strategy, expiration: long.expiration, dte: daysToExpiration(long.expiration, now), input, result,

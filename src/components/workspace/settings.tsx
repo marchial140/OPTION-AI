@@ -6,7 +6,7 @@ import { makeOccSymbol, strategyLabels, validateQuote } from "@/lib/quant";
 import type { ScoreKey } from "@/lib/quant";
 import type { AppState, Settings } from "@/lib/workspace";
 import { strategyKeys } from "./strategy-lab";
-import { actionForm, dataLabels, downloadJson, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, Status, Submit, timestamp } from "./ui";
+import { actionForm, dataLabels, downloadJson, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, SourceLink, Status, Submit, timestamp } from "./ui";
 
 type Refresh = () => Promise<void>;
 type NumberKey = KeysOf<Settings, number>;
@@ -25,6 +25,7 @@ const weekdays = [
 
 function Preferences({ state, refresh }: { state: AppState; refresh: Refresh }) {
   const [settings, setSettings] = useState(state.settings);
+  const [changed, setChanged] = useState<Set<keyof Settings>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [alert, setAlert] = useState("");
@@ -32,6 +33,7 @@ function Preferences({ state, refresh }: { state: AppState; refresh: Refresh }) 
   const weightTotal = weightKeys.reduce((sum, key) => sum + weights[key], 0);
 
   const change = <Key extends keyof Settings>(key: Key, value: Settings[Key]) => {
+    setChanged((keys) => keys.has(key) ? keys : new Set(keys).add(key));
     setSettings((current) => ({ ...current, [key]: value }));
     setAlert("");
     setError("");
@@ -54,7 +56,9 @@ function Preferences({ state, refresh }: { state: AppState; refresh: Refresh }) 
       return;
     }
     try {
-      const response = await request<{ settings: Settings }>("/api/settings", "PATCH", settings);
+      const edits = Object.fromEntries([...changed].map((key) => [key, settings[key]]));
+      const response = await request<{ settings: Settings }>("/api/settings", "PATCH", edits);
+      setChanged(new Set());
       setSettings(response.settings);
       await refresh();
       setAlert("Réglages enregistrés.");
@@ -66,6 +70,7 @@ function Preferences({ state, refresh }: { state: AppState; refresh: Refresh }) 
   };
 
   return <form className="wp-form" onSubmit={actionForm(() => void submit())}>
+    <fieldset className="wp-form-lock" disabled={busy}>
     <div className="wp-grid wp-grid-even">
       <div className="wp-stack">
         <Panel title="Capital et risque" detail="Ces limites s’appliquent à la recherche et au portefeuille papier.">
@@ -110,7 +115,12 @@ function Preferences({ state, refresh }: { state: AppState; refresh: Refresh }) 
             {numeric("dailySearchLimit", "Recherches web par jour", 0, 300)}
             {numeric("maxRequestsPerScan", "Requêtes par scan", 1, 60)}
           </div>
-          <div className="wp-card-row"><p>Demande cumulée · {state.cost.requests} requête(s), {state.cost.searches} recherche(s) web.</p><p>Aujourd’hui {money(state.cost.daily)} · Ce mois {money(state.cost.monthly)}</p></div>
+          <div className="wp-card-row">
+            <p>Aujourd’hui · {state.cost.requests} requête(s), {state.cost.searches} recherche(s) web.</p>
+            <p>Coût réconcilié estimé · Aujourd’hui {money(state.cost.daily)} · Ce mois {money(state.cost.monthly)}</p>
+            {(state.cost.dailyUnreconciled || state.cost.monthlyUnreconciled) ? <p>Usage en attente de rapprochement · Aujourd’hui {money(state.cost.dailyUnreconciled)} · Ce mois {money(state.cost.monthlyUnreconciled)}</p> : null}
+            {state.cost.pending ? <p>Budget réservé aux demandes en cours · {money(state.cost.pending)}</p> : null}
+          </div>
           {!state.research.pricingConfigured && <Notice>Renseignez les tarifs du modèle et de la recherche web côté serveur pour estimer les coûts de l’espace réel.</Notice>}
         </Panel>
         <Panel title="Scan automatique" detail="Horaire du marché américain · America/New_York">
@@ -125,7 +135,10 @@ function Preferences({ state, refresh }: { state: AppState; refresh: Refresh }) 
             {weekdays.map(([day, label]) => <label key={day}><input type="checkbox" checked={settings.schedule.weekdays.includes(day)}
               onChange={(event) => change("schedule", { ...settings.schedule, weekdays: event.target.checked ? [...settings.schedule.weekdays, day] : settings.schedule.weekdays.filter((item) => item !== day) })} /> {label}</label>)}
           </fieldset>
-          <small className="wp-micro">Les exécutions programmées requièrent le déclencheur authentifié du serveur. Les jours fériés boursiers sont exclus.</small>
+          <small className="wp-micro">Les exécutions programmées suivent les horaires et jours d’ouverture du marché américain.</small>
+          {settings.schedule.enabled && <Notice>{state.research.schedulerConfigured
+            ? "Une clé du planificateur est configurée. Les scans dépendent des appels du déclencheur d’hébergement."
+            : "Le déclencheur d’hébergement nécessite une clé du planificateur. La préférence peut être enregistrée dès maintenant."}</Notice>}
         </Panel>
         <Panel title="Affichage">
           <div className="wp-fields">
@@ -140,6 +153,7 @@ function Preferences({ state, refresh }: { state: AppState; refresh: Refresh }) 
     {error && <Notice type="error">{error}</Notice>}
     {alert && <Notice type="success">{alert}</Notice>}
     <div className="wp-actions"><Submit pending={busy}><Save size={16} /> Enregistrer les réglages</Submit></div>
+    </fieldset>
   </form>;
 }
 
@@ -206,6 +220,7 @@ function BrokerQuotes({ state, refresh }: { state: AppState; refresh: Refresh })
   return <Panel title="Cotations courtier attestées" detail="Saisissez une observation horodatée pour l’utiliser dans une analyse indicative."
     actions={state.mode === "live" ? <button className="wp-button" type="button" aria-expanded={show} onClick={() => setShow(!show)}>{show ? "Fermer" : "Saisir une cotation"}</button> : undefined}>
     {state.mode === "demo" && <Notice>La saisie de cotations courtier est disponible dans l’espace réel.</Notice>}
+    {state.mode === "live" && <p className="wp-micro">Ces observations sont attestées par vous et limitées à l’analyse indicative.</p>}
     {alert && <Notice type="success">{alert}</Notice>}
     {error && <Notice type="error">{error}</Notice>}
     {show && <form className="wp-form" onSubmit={actionForm(() => void save())}>
@@ -231,7 +246,7 @@ function BrokerQuotes({ state, refresh }: { state: AppState; refresh: Refresh })
     </form>}
     {state.manualQuotes.length ? <div className="wp-table-wrap"><table className="wp-table"><thead><tr><th>Contrat</th><th>Bid / Ask</th><th>Source</th><th>Horodatage</th><th>Action</th></tr></thead><tbody>
       {state.manualQuotes.map((quote) => <tr key={quote.id}><td>{quote.id}<small><Status value={validateQuote(quote).status} dictionary={dataLabels} /></small></td>
-        <td>{money(quote.bid)} / {money(quote.ask)}</td><td><a href={quote.source.url} target="_blank" rel="noreferrer">{quote.source.publisher}</a></td><td>{timestamp(quote.quoteAt)}</td>
+        <td>{money(quote.bid)} / {money(quote.ask)}</td><td><SourceLink url={quote.source.url}>{quote.source.publisher}</SourceLink></td><td>{timestamp(quote.quoteAt)}<small>Enregistrée le {timestamp(quote.retrievedAt)}</small></td>
         <td><button type="button" className="wp-button wp-icon wp-danger" aria-label={`Retirer ${quote.id}`} disabled={pending} onClick={() => void remove(quote.id)}><Trash2 size={15} /></button></td>
       </tr>)}
     </tbody></table></div> : <Empty title="Aucune cotation courtier enregistrée" detail="Les observations admissibles apparaîtront ici avec leur source et leur horodatage." />}
@@ -275,6 +290,43 @@ function Privacy({ refresh, onReset }: { refresh: Refresh; onReset: () => void }
   </Panel>;
 }
 
+type ConnectionResult = {ok:boolean; message:string; estimatedCost:number|null; unreconciledCost:number|null};
+
+function OpenAIConnection({ refresh }: { refresh: Refresh }) {
+  const [pending,setPending] = useState(false);
+  const [result,setResult] = useState<ConnectionResult | null>(null);
+  const [error,setError] = useState("");
+  const usd = new Intl.NumberFormat("fr-CA",{style:"currency",currency:"USD",maximumFractionDigits:8});
+
+  async function check() {
+    setPending(true);
+    setResult(null);
+    setError("");
+    try {
+      setResult(await request<ConnectionResult>("/api/ai/connection-test","POST"));
+      await refresh();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return <div className="wp-card-row">
+    <p>Le test envoie une requête réelle avec recherche Web et peut entraîner un coût.</p>
+    <button type="button" className="wp-button" disabled={pending} onClick={() => void check()}>
+      {pending ? "Vérification en cours…" : "Tester la connexion OpenAI"}
+    </button>
+    <div role="status" aria-live="polite">
+      {error && <p>{error}</p>}
+      {result && <><p>{result.ok ? "Succès" : "Échec"} · {result.message}</p>
+        <p>Coût estimé · {result.estimatedCost === null ? "Indisponible" : usd.format(result.estimatedCost)}</p>
+        {result.unreconciledCost !== null && <p>Coût potentiel non confirmé · {usd.format(result.unreconciledCost)}</p>}
+      </>}
+    </div>
+  </div>;
+}
+
 export function SettingsPage({ state, refresh }: { state: AppState; refresh: Refresh }) {
   const [resetCount, setResetCount] = useState(0);
   const latest = state.scans.find((scan) => scan.status === "completed" || scan.status === "partial");
@@ -293,6 +345,7 @@ export function SettingsPage({ state, refresh }: { state: AppState; refresh: Ref
           {state.research.model && <p>Modèle configuré · {state.research.model}</p>}
           <p>Dernier scan abouti · {timestamp(latest?.completedAt)}</p>
         </div>
+        <OpenAIConnection refresh={refresh} />
         {errors.map((scan) => <details key={scan.id} className="wp-card-row"><summary>Diagnostic du scan du {timestamp(scan.startedAt)}</summary>
           <p>{scan.error ?? `Actifs en échec · ${scan.failed.join(", ")}`}</p>
         </details>)}

@@ -1,5 +1,5 @@
 import {
-  constructStrategies, defaultRiskPreferences, makeOccSymbol,
+  constructStrategies, defaultRiskPreferences, makeOccSymbol, optionTradingCutoff,
   type ContractQuote, type Direction, type ResearchCandidate,
 } from './quant';
 
@@ -73,6 +73,9 @@ const chainFixtures: { symbol: string; type: 'call' | 'put'; baseDays: number; l
 function fixtureExpiration(now: Date, baseDays: number) {
   const date = new Date(now.getTime() + baseDays * day);
   date.setUTCDate(date.getUTCDate() + (12 - date.getUTCDay()) % 7);
+  while (optionTradingCutoff(date.toISOString().slice(0, 10)) === null) {
+    date.setUTCDate(date.getUTCDate() - 1);
+  }
   return date.toISOString().slice(0, 10);
 }
 
