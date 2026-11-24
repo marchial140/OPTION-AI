@@ -75,3 +75,16 @@ npm run start
 ```
 
 Check `/api/health`, sign in with a test account, run a one-ticker scan, and examine the citations, data status, and usage ledger. Configure `CRON_SECRET` and the authenticated scheduler when testing automatic work. See `DEPLOYMENT.md`, `API_INTEGRATION.md`, and `DATA_PROVENANCE.md`.
+
+## Scanner ranking and request-size check, November 24, 2026
+
+Two public AAPL option snapshots were replayed through the current market-data validation and strategy engine at their original US market close. The replay used a neutral direction assumption and the default USD 500 per-trade risk cap on USD 10,000 capital. The resulting order and calculations matched when rows were reversed and when calls and puts were reordered. Every retained result stayed within the configured loss limit.
+
+| Session | Valid contracts | Expirations | Retained | Calls / puts / call spreads / put spreads |
+| --- | ---: | ---: | ---: | --- |
+| 2020-01-06 | 158 | 1 | 60 | 1 / 10 / 11 / 38 |
+| 2026-11-20 | 144 | 6 | 60 | 6 / 8 / 17 / 29 |
+
+The old 48-row API query returned 48 calls and no puts in a single-expiration AAPL sample. The new near-the-money filter and 256-row limit returned 72 calls and 72 puts in the 7–30 DTE sample. Market data came from the [2020 historical chain](https://api.marketdata.app/v1/options/chain/AAPL/?date=2020-01-06) and [2026 historical chain](https://api.marketdata.app/v1/options/chain/AAPL/?date=2026-11-20&dte=7-30&nonstandard=false&dateformat=unix&strikeLimit=12&limit=256). This checked deterministic ranking and risk calculations. It did not measure fills, investment outcomes, or predictive performance.
+
+With the SDK transport intercepted locally, the serialized quick screening request shrank from 6,098 to 3,202 bytes. Deep screening went from 6,103 to 3,207 bytes and contract discovery from 3,528 to 2,414 bytes. These are HTTP payload measurements. Live provider token usage and billing require an authorized live scan.

@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { makeDemoFixtures } from "../demo";
-import { payoffAt, strategyLabels, type EvidenceSource, type Opportunity } from "../quant";
+import { compareOpportunities, payoffAt, strategyLabels, type EvidenceSource, type Opportunity } from "../quant";
 import type { Mode } from "../workspace";
 import type { ResearchedCandidate } from "./research";
 import { checkNumericAssertion, cleanText, mergeSources } from "./researchEvidence";
@@ -58,9 +58,7 @@ function selectContext(context: ChatContext, dataMode: Mode, message: string, hi
   const mentioned = current.size ? current : new Set(prior ?? []);
   const matches = (row: { symbol: string }) => mentioned.size === 0 || mentioned.has(row.symbol);
   const candidates = allCandidates.filter(matches).slice(0, 4);
-  const ranked = allOpportunities.filter(matches).sort((a, b) =>
-    (b.score?.total ?? -1) - (a.score?.total ?? -1) || a.result.maxLoss - b.result.maxLoss,
-  );
+  const ranked = allOpportunities.filter(matches).sort(compareOpportunities);
   const compared = new Map<string, Opportunity>();
   for (const opportunity of ranked) {
     if (!compared.has(opportunity.symbol)) compared.set(opportunity.symbol, opportunity);

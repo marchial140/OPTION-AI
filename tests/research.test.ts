@@ -8,7 +8,7 @@ vi.mock("openai", () => ({
 }));
 
 import {
-  chatResearch, marketSession, researchAsset, researchHealth, validateManualQuote,
+  chatResearch, findRecentWebScreen, marketSession, researchAsset, researchHealth, validateManualQuote,
   type AssetResearchInput, type ResearchUsage,
 } from "../src/lib/server/research";
 import { makeOccSymbol } from "../src/lib/quant";
@@ -81,7 +81,7 @@ describe("web research", () => {
     ]));
     expect(result.candidate?.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "underlying" })]));
     expect(JSON.stringify(result)).not.toContain("173.25");
-    expect(allowRequest).toHaveBeenCalledWith(expect.objectContaining({ model: "test-model", requestType: "screen", estimatedSearches: 2 }));
+    expect(allowRequest).toHaveBeenCalledWith(expect.objectContaining({ model: "test-model", requestType: "screen", estimatedSearches: 1 }));
     expect(recordUsage).toHaveBeenCalledWith(expect.objectContaining({ inputTokens: 100, outputTokens: 50, searchUsage: 1, estimatedCost: 0.01015 }));
     expect(createResponse).toHaveBeenCalledWith(expect.objectContaining({
       model: "test-model", store: false, tool_choice: "required",
@@ -198,7 +198,7 @@ describe("web research", () => {
     const budget = vi.fn(async () => true);
     const record = vi.fn(async () => {});
     await researchAsset({ ...scan, allowRequest: budget, recordUsage: record });
-    expect(budget).toHaveBeenCalledWith(expect.objectContaining({ estimatedSearches: 2 }));
+    expect(budget).toHaveBeenCalledWith(expect.objectContaining({ estimatedSearches: 1 }));
     expect(record).toHaveBeenCalledWith(expect.objectContaining({ searchUsage: 1, estimatedCost: 0.01015 }));
   });
 
@@ -248,6 +248,48 @@ describe("web research", () => {
     expect(createResponse).toHaveBeenCalledTimes(1);
   });
 
+  it("reuses a completed screen without qualifying claims and keeps its original source time", async () => {
+    createResponse.mockResolvedValueOnce(response({
+      ticker: "NVDA", companyName: "NVIDIA", direction: "insufficient", thesis: null,
+    }, [secUrl]));
+    const prior = await researchAsset(scan);
+    expect(prior.candidate?.sources).toEqual([]);
+
+    const reused = await researchAsset({ ...scan, cachedResult: prior, maxRequests: 0 });
+
+    expect(reused).toMatchObject({
+      status: "completed", cached: true, requestCount: 0, candidate: { direction: "insufficient" },
+      examinedSources: [expect.objectContaining({ url: secUrl })],
+    });
+    expect(reused.examinedSources).toEqual(prior.examinedSources);
+    expect(reused.candidate?.updatedAt).toBe(prior.candidate?.updatedAt);
+    expect(createResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it("looks past a newer quote-only snapshot for a reusable Web screen", async () => {
+    createResponse.mockResolvedValueOnce(response(defaultScreen));
+    const prior = await researchAsset(scan);
+    const candidate = prior.candidate!;
+    const previous = {
+      id: "web", type: "deep" as const, status: "completed" as const, tickers: ["NVDA"],
+      startedAt: candidate.updatedAt, completed: ["NVDA"], failed: [], candidates: [candidate],
+      opportunities: [], rejections: [], requestCount: 1, estimatedCost: prior.estimatedCost,
+      webScreenSources: { NVDA: prior.webScreenSources ?? [] },
+    };
+    const newer = {
+      ...previous, id: "quotes", webScreenSources: undefined, candidates: [{
+        ...candidate, evidence: [], direction: "insufficient" as const,
+        sources: [{ url: "https://api.marketdata.app/v1/options/chain/NVDA/", publisher: "Market Data",
+          retrievedAt: candidate.updatedAt, method: "marketdata-cached" }],
+      }],
+    };
+
+    const now = new Date(candidate.updatedAt);
+    expect(findRecentWebScreen([newer, previous], "current", "NVDA", now)?.candidate?.thesis).toBe(candidate.thesis);
+    expect(findRecentWebScreen([newer], "current", "NVDA", now)).toBeUndefined();
+    expect(findRecentWebScreen([previous], "current", "NVDA", new Date(now.getTime() + 15 * 60_000))).toBeUndefined();
+  });
+
   it("stops before a request when the reserved budget is exhausted", async () => {
     const result = await researchAsset({ ...scan, allowRequest: async () => false });
     expect(result).toMatchObject({ status: "failed", requestCount: 0, error: expect.stringContaining("Budget") });
@@ -268,7 +310,7 @@ describe("web research", () => {
     expect(result).toMatchObject({ status: "failed", requestCount: 1, error: expect.stringContaining("délai") });
     expect(createResponse).toHaveBeenCalledTimes(1);
     expect(recordUsage).toHaveBeenCalledWith(expect.objectContaining({
-      usageAvailable: false, estimatedCost: 0, unreconciledCost: expect.any(Number), unreconciledSearches: 2,
+      usageAvailable: false, estimatedCost: 0, unreconciledCost: expect.any(Number), unreconciledSearches: 1,
     }));
     expect(recordUsage.mock.calls[0][0].unreconciledCost).toBeGreaterThan(0);
   });

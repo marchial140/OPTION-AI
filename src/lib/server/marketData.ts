@@ -7,7 +7,7 @@ import {
 import { marketSession } from "./market";
 import { isExchangeListed } from "./marketDirectory";
 
-const maxRows = 48;
+const maxRows = 256;
 const cacheLifetimeMs = 30_000;
 const maxCacheEntries = 64;
 const maxConcurrentRequests = 4;
@@ -76,6 +76,7 @@ function chainUrl(symbol: string, minDte: number, maxDte: number) {
     nonstandard: "false",
     dateformat: "unix",
     dte: `${minDte}-${maxDte}`,
+    strikeLimit: "12",
     limit: String(maxRows),
   }).toString();
   return url;

@@ -340,18 +340,27 @@ export async function openAIRequest<Schema extends ZodType>(
   });
   const retryMax = envInteger("AI_MAX_RETRIES", 1, 0, 2);
   const maxToolCalls = input.web ? (input.maxWebCalls ?? (input.deep ? 4 : 2)) : 0;
-  const format = input.minimalWebProbe ? undefined : zodTextFormat(input.schema, input.schemaName);
-  const structuredFormat = format && !(input.web && input.promptOnlyWeb) ? {
-    ...format,
+  const rawFormat = input.minimalWebProbe ? undefined : input.type === "chat"
+    ? zodTextFormat(input.schema, input.schemaName)
+    : {
+      type: "json_schema" as const,
+      name: input.schemaName,
+      strict: true,
+      schema: z.toJSONSchema(input.schema, { reused: "ref" }),
+    };
+  const format = rawFormat ? {
+    ...rawFormat,
     // Defaults belong to local validation and are unsupported in strict provider schemas.
-    schema: JSON.parse(JSON.stringify(format.schema, (key, value: unknown) =>
-      key === "default" ? undefined : value)),
+    schema: JSON.parse(JSON.stringify(rawFormat.schema, (key, value: unknown) =>
+      key === "default" || key === "$schema" ? undefined : value)),
   } : undefined;
+  const structuredFormat = input.web && input.promptOnlyWeb ? undefined : format;
   const instructions = input.web && input.promptOnlyWeb
-    ? input.instructions + "\nReturn only one JSON object matching this schema. Use null for unavailable nullable fields and [] for empty lists. Put source URLs in their designated fields. Do not add Markdown or citation markers to JSON syntax. Schema: " + JSON.stringify(format?.schema)
+    ? input.instructions + "\nReturn one JSON object. No Markdown or citation markers. Use null or [] for missing data and put URLs in source fields. Schema: " + JSON.stringify(format?.schema)
     : input.instructions;
   // Reserve conservatively for search context and reconcile with actual usage.
-  const estimatedWebContextTokens = input.web ? (input.deep ? 20_000 : 10_000) : 0;
+  const usesFixedSearchBlock = /^gpt-(?:4o|4\.1)-mini(?:-\d{4}-\d{2}-\d{2})?$/.test(model.name);
+  const estimatedWebContextTokens = usesFixedSearchBlock ? 8_000 : input.deep ? 20_000 : 10_000;
   const formatBytes = structuredFormat ? Buffer.byteLength(JSON.stringify(structuredFormat), "utf8") : 0;
   const reservedTokens = Buffer.byteLength(instructions + input.input, "utf8") + formatBytes +
     estimatedWebContextTokens * maxToolCalls + 2_000;

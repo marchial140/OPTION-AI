@@ -70,7 +70,7 @@ describe("Market Data cached option chains", () => {
     const url = new URL(String(fetch.mock.calls[0][0]));
     expect(url.origin + url.pathname).toBe("https://api.marketdata.app/v1/options/chain/NVDA/");
     expect(Object.fromEntries(url.searchParams)).toEqual({
-      mode: "cached", maxage: "30min", nonstandard: "false", dateformat: "unix", dte: "7-30", limit: "48",
+      mode: "cached", maxage: "30min", nonstandard: "false", dateformat: "unix", dte: "7-30", strikeLimit: "12", limit: "256",
     });
     expect(fetch.mock.calls[0][1]).toMatchObject({
       cache: "no-store", redirect: "error",
@@ -167,7 +167,7 @@ describe("Market Data cached option chains", () => {
   it("rejects misaligned tables and provider bodies exceeding the configured reach", async () => {
     const fetch = setupFetch(chain({ bid: [] }));
     await expect(quotes()).rejects.toThrow("incomplète ou incohérente");
-    fetch.mockImplementation(async () => Response.json(chain({ optionSymbol: Array(49).fill(optionSymbol) }), { status: 203 }));
+    fetch.mockImplementation(async () => Response.json(chain({ optionSymbol: Array(257).fill(optionSymbol) }), { status: 203 }));
     await expect(quotes()).rejects.toThrow("incomplète ou incohérente");
   });
 

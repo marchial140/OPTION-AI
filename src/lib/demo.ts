@@ -1,5 +1,5 @@
 import {
-  constructStrategies, defaultRiskPreferences, makeOccSymbol, optionTradingCutoff,
+  compareOpportunities, constructStrategies, defaultRiskPreferences, makeOccSymbol, optionTradingCutoff,
   type ContractQuote, type Direction, type ResearchCandidate,
 } from './quant';
 
@@ -101,7 +101,7 @@ export function makeDemoFixtures(now = new Date()) {
   const opportunities = candidates.flatMap((candidate) => constructStrategies(quotes.filter(({ symbol }) => symbol === candidate.symbol), {
     ...defaultRiskPreferences, strategies: ['bull_call', 'bear_put'],
   }, { candidate, now, fees: 1.3, allowDemo: true }).opportunities)
-    .sort((left, right) => (right.score?.total ?? -1) - (left.score?.total ?? -1));
+    .sort(compareOpportunities);
 
   const sampleCounts = [[4, 2], [6, 3], [5, 2], [7, 4], [5, 3], [8, 5], [6, 5]];
   const scanHistory = sampleCounts.map(([count, approved], index) => ({

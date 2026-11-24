@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { researchAsset } from "../src/lib/server/research";
+import { discoverySchema } from "../src/lib/server/researchEvidence";
+import { openAIRequest, type UsageReservation } from "../src/lib/server/researchOpenAI";
 
 const secUrl = "https://www.sec.gov/Archives/edgar/data/1045810/nvda.htm";
 const issuerUrl = "https://investor.nvidia.com/news/announcements/default.aspx";
@@ -76,14 +78,80 @@ describe("official SDK request and response contract", () => {
       model: "configured-test-model",
       store: false,
       tool_choice: "required",
-      max_tool_calls: 2,
+      max_tool_calls: 1,
+      max_output_tokens: 1200,
       text: { format: { type: "json_schema", name: "underlying_research", strict: true } },
     });
     expect(body.tools).toEqual([{ type: "web_search" }]);
     expect(body.include).toEqual(["web_search_call.action.sources"]);
-    expect(body.text.format.schema.properties).toHaveProperty("underlyingQuote");
-    expect(body.text.format.schema.properties.bullishFactors).not.toHaveProperty("default");
+    const schema = body.text.format.schema;
+    expect(schema.properties).toHaveProperty("underlyingQuote");
+    expect(schema.properties).not.toHaveProperty("uncertainty");
+    expect(schema.required).toEqual(Object.keys(schema.properties));
+    expect(schema.additionalProperties).toBe(false);
+    const claimList = schema.$defs[schema.properties.bullishFactors.$ref.split("/").at(-1)];
+    expect(claimList).toMatchObject({ type: "array", maxItems: 3 });
+    expect(JSON.stringify(schema)).not.toContain("publishedAt");
+    expect(JSON.stringify(schema)).not.toContain('"default"');
+    expect(Buffer.byteLength(JSON.stringify(body.text.format), "utf8")).toBeLessThan(2500);
     expect(body.instructions).not.toContain('"underlyingQuote"');
+  });
+
+  it("reserves the documented fixed search input block for GPT-4.1 mini with the actual compact request", async () => {
+    vi.stubEnv("OPENAI_MODEL", "gpt-4.1-mini");
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(json({
+      status: "completed",
+      usage: { input_tokens: 8230, output_tokens: 30 },
+      output: [
+        { type: "web_search_call", status: "completed", action: { type: "search", sources: [{ type: "url", url: secUrl }] } },
+        message("final_answer", [text(JSON.stringify(analysis))]),
+      ],
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const allowRequest = vi.fn<(reservation: UsageReservation) => Promise<boolean>>(async () => true);
+
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", allowRequest });
+
+    expect(result).toMatchObject({ status: "completed", requestCount: 1, estimatedCost: 0.01829 });
+    const body = JSON.parse(String(fetch.mock.calls[0][1]?.body));
+    const promptBytes = Buffer.byteLength(body.instructions + body.input, "utf8");
+    const schemaBytes = Buffer.byteLength(JSON.stringify(body.text.format), "utf8");
+    const estimatedUsd = (promptBytes + schemaBytes + 8000 + 2000 + 2 * body.max_output_tokens) / 1_000_000 + 0.01;
+    expect(allowRequest).toHaveBeenCalledExactlyOnceWith({
+      model: "gpt-4.1-mini", requestType: "screen", estimatedSearches: 1, estimatedCost: Number(estimatedUsd.toFixed(8)),
+    });
+  });
+
+  it("keeps discovery quote diagnostics typed and omits unused provider fields", async () => {
+    const mockContract = {
+      identifier: "NVDA261218C00175000", type: "call", expiration: "2026-12-18", strike: 175, multiplier: 100,
+      bid: 4.9, ask: 5, quoteAt: "2026-11-19T16:00:00.000Z", currency: "USD", source, volume: 1,
+      openInterest: 100, impliedVolatility: 0.2,
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(json({
+      status: "completed",
+      usage: { input_tokens: 100, output_tokens: 30 },
+      output: [
+        { type: "web_search_call", status: "completed", action: { type: "search", sources: [{ type: "url", url: secUrl }] } },
+        message("final_answer", [text(JSON.stringify({ ticker: "NVDA", contracts: [mockContract] }))]),
+      ],
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const { data } = await openAIRequest({
+      type: "contract", schema: discoverySchema, schemaName: "option_discovery", instructions: "Find cited records",
+      input: '{"symbol":"NVDA"}', maxRequests: 1, maxOutputTokens: 1100, maxWebCalls: 1, web: true, usages: [],
+    });
+    const schema = JSON.parse(String(fetch.mock.calls[0][1]?.body)).text.format.schema;
+    const contracts = schema.properties.contracts;
+    expect(contracts.maxItems).toBe(4);
+    const item = schema.$defs[contracts.items.$ref.split("/").at(-1)];
+    expect(item.required).toEqual(expect.arrayContaining(["bid", "ask", "quoteAt"]));
+    const fields = item.properties;
+    for (const field of ["volume", "openInterest", "impliedVolatility"]) {
+      expect(fields).not.toHaveProperty(field);
+      expect(data.contracts[0]).not.toHaveProperty(field);
+    }
+    expect(data.contracts[0]).toMatchObject({ bid: 4.9, ask: 5, source: { url: secUrl } });
   });
 
   it.each([
@@ -117,8 +185,11 @@ describe("official SDK request and response contract", () => {
     expect(compatibility).not.toHaveProperty("text");
     expect(compatibility).toMatchObject({
       tools: [{ type: "web_search" }], include: ["web_search_call.action.sources"],
-      instructions: expect.stringContaining("Return only one JSON object"),
+      instructions: expect.stringContaining("Return one JSON object"),
     });
+    const fallbackSchema = JSON.parse(compatibility.instructions.slice(compatibility.instructions.lastIndexOf("Schema: ") + 8));
+    expect(fallbackSchema).toEqual(initial.text.format.schema);
+    expect(JSON.stringify(fallbackSchema)).not.toContain('"default"');
   });
 
   it.each([

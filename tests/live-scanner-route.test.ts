@@ -243,6 +243,20 @@ it('persists authenticated scanner results, sources and usage through success, r
 
   const replay = await result<{ scan: Scan }>(await call('POST', 'scans', scanInput), 202);
   expect(replay.scan.id).toBe(scan.id);
+  const repeatNvda = await result<{ scan: Scan }>(await call('POST', 'scans', {
+    cookie, data: { type: 'quick', tickers: ['NVDA'] },
+  }), 202);
+  const { scan: cachedNvda } = await result<{ scan: Scan }>(await call('POST', `scans/${repeatNvda.scan.id}/advance`, { cookie }));
+  expect(cachedNvda).toMatchObject({
+    status: 'completed', requestCount: 0, estimatedCost: 0, cached: ['NVDA'],
+    examinedSources: expect.arrayContaining([expect.objectContaining({ url: source.url })]),
+  });
+  expect(cachedNvda.candidates[0]).toMatchObject({ thesis, updatedAt: scan.candidates[0].updatedAt });
+  expect(cachedNvda.candidates[0]).not.toHaveProperty('price', 171.31);
+  expect(cachedNvda.candidates[0]).toHaveProperty('price', null);
+  expect(JSON.stringify(cachedNvda.candidates)).not.toContain('"kind":"option"');
+  expect(providerCalls).toHaveLength(2);
+
   const unreadable = await result<{ scan: Scan }>(await call('POST', 'scans', { cookie, data: { type: 'quick', tickers: ['MSFT'] } }), 202);
   const { scan: limited } = await result<{ scan: Scan }>(await call('POST', `scans/${unreadable.scan.id}/advance`, { cookie }));
   expect(limited).toMatchObject({

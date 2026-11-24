@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import Decimal from 'decimal.js';
 import { initialSymbols, type BudgetReservation, type Notification, type Scan, type ScanType, type Settings, type Usage, type WorkspaceState } from '@/lib/workspace';
-import { assessRisk, type RiskPreferences } from '@/lib/quant';
+import { assessRisk, compareOpportunities, type RiskPreferences } from '@/lib/quant';
 import type { Identity } from './auth';
 import { currentLegSources } from './observations';
 import { portfolioExposure } from './paper';
-import { marketDataAvailableFor, marketSession, researchAsset, researchHealth } from './research';
+import { findRecentWebScreen, marketDataAvailableFor, marketSession, researchAsset, researchHealth } from './research';
 import { mutateWorkspace, readWorkspace } from './store';
 
 export class JobError extends Error {
@@ -226,7 +226,7 @@ function finishScan(state: WorkspaceState, current: Scan) {
   current.status = current.failed.length === current.tickers.length ? 'failed' : current.failed.length ? 'partial' : 'completed';
   current.completedAt = new Date().toISOString();
   current.stage = current.status === 'failed' ? 'Échec de l’analyse' : 'Analyse terminée';
-  current.opportunities.sort((a, b) => (b.score?.total ?? -1) - (a.score?.total ?? -1));
+  current.opportunities.sort(compareOpportunities);
   const amount = current.opportunities.length;
   notify(state,current.status === 'failed' ? 'scan_failed' : 'scan_completed',
     current.status === 'failed' ? 'La recherche n’a pas abouti. Consultez les diagnostics.' :
@@ -251,15 +251,9 @@ export async function advanceScan(identity: Identity, scanId: string, signal?: A
     scan.status = 'running';
     scan.current = symbol;
     scan.stage = 'screening';
-    const previous = state.scans.find((item) => item.id !== scanId && !activeScan(item) && item.completed.includes(symbol));
-    const cached = previous?.candidates.find((item) => item.symbol === symbol);
-    const cachedResult = cached ? {
-      symbol,status:'completed' as const,candidate:cached,
-      opportunities:previous?.opportunities.filter((item) => item.symbol === symbol) ?? [],
-      rejections:previous?.rejections.filter((item) => item.symbol === symbol).map((item) => item.reason) ?? [],
-      examinedSources:cached.sources,
-      requestCount:0,estimatedCost:0,
-    } : undefined;
+    const cachedResult = identity.mode === 'live' && scan.type === 'quick'
+      ? findRecentWebScreen(state.scans, scanId, symbol, now)
+      : undefined;
     return {
       scan, symbol, cachedResult, claim:true as const, manualQuotes:state.manualQuotes,
       settings:boundedParameters(state.settings,scan.parameters),
@@ -306,6 +300,9 @@ export async function advanceScan(identity: Identity, scanId: string, signal?: A
     else scan.completed.push(claim.symbol);
     if (result.candidate) scan.candidates.push(result.candidate);
     if (result.cached) (scan.cached ??= []).push(claim.symbol);
+    if (result.webScreenSources?.length) {
+      (scan.webScreenSources ??= {})[claim.symbol] = result.webScreenSources;
+    }
     if (result.examinedSources?.length) {
       scan.examinedSources = [...new Map([...(scan.examinedSources ?? []),...result.examinedSources]
         .map((source) => [source.url,source])).values()];

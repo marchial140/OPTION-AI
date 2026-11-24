@@ -100,10 +100,11 @@ function normalizeOpportunity(item: Opportunity, now?: Date): Opportunity {
 }
 
 function safeScan(scan: Scan) {
-  const { lease, idempotencyKey, requestFingerprint, ...data } = scan;
+  const { lease, idempotencyKey, requestFingerprint, webScreenSources, ...data } = scan;
   void lease;
   void idempotencyKey;
   void requestFingerprint;
+  void webScreenSources;
   return {...data,opportunities:data.opportunities.map((item) => normalizeOpportunity(item))};
 }
 

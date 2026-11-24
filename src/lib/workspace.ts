@@ -61,6 +61,7 @@ export type Scan = {
   lease?: { id: string; expiresAt: string };
   cached?: string[];
   examinedSources?: EvidenceSource[];
+  webScreenSources?: Record<string, EvidenceSource[]>;
 };
 
 export type PaperExit = {

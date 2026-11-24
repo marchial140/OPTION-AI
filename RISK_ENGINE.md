@@ -30,6 +30,10 @@ The default workspace allows up to 5% of $10,000 account capital per trade and 2
 
 The score is a weighted average on a 0–100 scale. The strategy can remain valid with an unavailable score if a required component is missing, including the finite reward/risk ratio for a long call.
 
+Missing components with positive weight make a strategy unscored. Components with zero weight do not participate in the calculation. The default order is score descending, then maximum loss ascending, then symbol and strategy identifier. Unscored strategies follow scored strategies. The scanner checks each compatible combination before retaining up to five spreads per long leg. Up to 60 results per symbol are retained after risk checks, with coverage across strategy types and expirations.
+
+When the earnings filter is active, it can exclude a position that overlaps a confirmed earnings date. If an independent date is unavailable, the opportunity carries an earnings-calendar warning.
+
 | Component | Weight | Rule |
 | --- | ---: | --- |
 | Liquidity | 30% | Use the least-liquid leg. Combine volume, capped at 500, with open interest, capped at 1,500, at weights of 45% and 55% |

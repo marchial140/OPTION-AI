@@ -65,7 +65,6 @@ export function checkNumericAssertion(text: string) {
 
 const sourceReferenceSchema = z.object({
   url: z.string(),
-  publishedAt: z.string().nullable().default(null),
 });
 
 const claimSchema = z.object({
@@ -75,7 +74,7 @@ const claimSchema = z.object({
 
 // A malformed qualitative observation carries no evidence and can be dropped on its own.
 const optionalClaimSchema = claimSchema.nullable().catch(null);
-const optionalClaimsSchema = z.array(optionalClaimSchema).default([]).catch([]);
+const optionalClaimsSchema = z.array(optionalClaimSchema).meta({ maxItems: 3 }).default([]).catch([]);
 
 export const screenSchema = z.object({
   ticker: z.string().trim().toUpperCase(),
@@ -88,7 +87,6 @@ export const screenSchema = z.object({
   sectorRisks: optionalClaimsSchema,
   volatilityContext: optionalClaimSchema.default(null),
   news: optionalClaimsSchema,
-  uncertainty: z.array(z.string()).default([]).catch([]),
   // An unusable event report must not discard independently sourced research.
   earnings: z.object({ date: z.iso.date(), source: sourceReferenceSchema }).nullable().default(null).catch(null),
   underlyingQuote: z.object({
@@ -111,13 +109,9 @@ export const discoverySchema = z.object({
     ask: z.number().nullable().default(null),
     quoteAt: z.string().nullable().default(null),
     currency: z.string().nullable().default(null),
-    volume: z.number().nullable().default(null),
-    openInterest: z.number().nullable().default(null),
-    impliedVolatility: z.number().nullable().default(null),
     source: sourceReferenceSchema,
-  })),
-  warnings: z.array(claimSchema).default([]),
-  uncertainty: z.array(z.string()).default([]),
+  })).meta({ maxItems: 4 }),
+  warnings: z.array(claimSchema).meta({ maxItems: 2 }).default([]),
 });
 
 export type Claim = z.infer<typeof claimSchema>;

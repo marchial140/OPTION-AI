@@ -87,7 +87,7 @@ function Preferences({ state, refresh }: { state: AppState; refresh: Refresh }) 
             {strategyKeys.map((key) => <label key={key}><input type="checkbox" checked={settings.strategies.includes(key)} onChange={(event) => change("strategies",
               event.target.checked ? [...settings.strategies, key] : settings.strategies.filter((strategy) => strategy !== key))} /> {strategyLabels[key]}</label>)}
           </fieldset>
-          <label className="wp-check"><input type="checkbox" checked={settings.avoidEarnings} onChange={(event) => change("avoidEarnings", event.target.checked)} /> Écarter les positions qui couvrent une publication de résultats</label>
+          <label className="wp-check"><input type="checkbox" checked={settings.avoidEarnings} onChange={(event) => change("avoidEarnings", event.target.checked)} /> Écarter les positions qui couvrent une date de résultats vérifiée</label>
           <label className="wp-check"><input type="checkbox" checked={settings.avoidNearExpiration} onChange={(event) => change("avoidNearExpiration", event.target.checked)} /> Écarter les échéances très proches</label>
         </Panel>
         <Panel title="Liquidité des contrats">

@@ -397,9 +397,12 @@ export function assessRisk(input: StrategyInput, result: StrategyResult, prefere
     if (prefs.avoidNearExpiration) reasons.push(message);
     else warnings.push(message);
   }
-  if (context.earningsAt && expiration && context.earningsAt.slice(0, 10) <= expiration && Date.parse(context.earningsAt) >= now.getTime() - dayMs) {
+  const earningsAt = Date.parse(context.earningsAt ?? '');
+  if (context.earningsAt && expiration && context.earningsAt.slice(0, 10) <= expiration && earningsAt >= now.getTime() - dayMs) {
     if (prefs.avoidEarnings) reasons.push('Publication de résultats avant l’échéance.');
     else warnings.push('Publication de résultats avant l’échéance.');
+  } else if (prefs.avoidEarnings && !context.allowDemo && !Number.isFinite(earningsAt)) {
+    warnings.push('Le calendrier des résultats est inconnu. Le filtre ne peut écarter que les dates confirmées.');
   }
   if (context.dividendAt && expiration && context.dividendAt.slice(0, 10) <= expiration && Date.parse(context.dividendAt) >= now.getTime() - dayMs) {
     warnings.push('Date de détachement du dividende avant l’échéance.');
@@ -425,6 +428,13 @@ export function assessRisk(input: StrategyInput, result: StrategyResult, prefere
 }
 
 const defaultWeights: Record<ScoreKey, number> = { liquidity: 30, payoff: 25, direction: 20, execution: 15, quality: 10 };
+const maxSpreadsPerLongLeg = 5;
+const maxOpportunitiesPerSymbol = 60;
+
+export function compareOpportunities(a: Opportunity, b: Opportunity): number {
+  return (b.score?.total ?? -1) - (a.score?.total ?? -1) || a.result.maxLoss - b.result.maxLoss
+    || a.symbol.localeCompare(b.symbol) || a.id.localeCompare(b.id);
+}
 
 export function opportunityQuoteStatus(legs: Pick<ContractQuote, 'status'>[]): DataStatus {
   if (!legs.length) return 'INSUFFICIENT';
@@ -436,15 +446,16 @@ export function opportunityQuoteStatus(legs: Pick<ContractQuote, 'status'>[]): D
 }
 
 export function scoreOpportunity(input: StrategyInput, result: StrategyResult, direction: Direction, weights: ScoreWeights = {}): ScoreResult | null {
-  const optionVolumes = input.legs.map(({ volume, openInterest }) => [volume, openInterest] as const);
-  if (optionVolumes.some(([volume, openInterest]) => volume === undefined || openInterest === undefined) || direction === 'insufficient') return null;
-  // A long call has no finite maximum payout, so its payoff component stays unavailable.
-  if (result.rewardRisk === null || result.rewardRisk < 0) return null;
   const mergedWeights = { ...defaultWeights, ...weights };
   const weightTotal = Object.values(mergedWeights).reduce((sum, value) => sum + value, 0);
   if (!Number.isFinite(weightTotal) || weightTotal <= 0 || Object.values(mergedWeights).some((value) => value < 0)) return null;
 
-  const liquidities = optionVolumes.map(([volume, openInterest]) => (Math.min((volume ?? 0) / 500, 1) * 0.45 + Math.min((openInterest ?? 0) / 1500, 1) * 0.55) * 100);
+  const liquidities = input.legs.map(({ volume, openInterest }) => volume === undefined || openInterest === undefined
+    ? null : (Math.min(volume / 500, 1) * 0.45 + Math.min(openInterest / 1500, 1) * 0.55) * 100);
+  const liquidity = liquidities.every((value): value is number => value !== null) ? Math.min(...liquidities) : null;
+  // A long call has no finite maximum payout, so its payoff component stays unavailable.
+  const payoff = result.rewardRisk !== null && Number.isFinite(result.rewardRisk) && result.rewardRisk >= 0
+    ? Math.min(result.rewardRisk / 2.5, 1) * 100 : null;
   const widestSpread = Math.max(...input.legs.map(spreadPercent));
   const bullish = input.strategy === 'long_call' || input.strategy === 'bull_call';
   const aligned = direction === (bullish ? 'bullish' : 'bearish');
@@ -452,15 +463,57 @@ export function scoreOpportunity(input: StrategyInput, result: StrategyResult, d
   if (sourceStatus === 'UNVERIFIED' || sourceStatus === 'INSUFFICIENT' || !quotesAreSynchronized(input.legs)) return null;
   const quality = sourceStatus === 'VERIFIED_DELAYED' || sourceStatus === 'MANUAL_ATTESTED' ? 65 : 100;
 
-  const components: [ScoreKey, string, number, string][] = [
-    ['liquidity', 'Liquidité', Math.min(...liquidities), 'Volume et intérêt ouvert de la jambe la moins liquide, plafonnés à 500 et 1 500.'],
-    ['payoff', 'Profil rendement / risque', Math.min(result.rewardRisk / 2.5, 1) * 100, 'Rapport entre le meilleur résultat net à l’échéance et la perte maximale, plafonné à 2,5.'],
-    ['direction', 'Cohérence directionnelle', aligned ? 100 : direction === 'mixed' ? 50 : direction === 'neutral' ? 35 : 0, 'Alignement de la stratégie sur la direction de la thèse de recherche.'],
+  const components: [ScoreKey, string, number | null, string][] = [
+    ['liquidity', 'Liquidité', liquidity, 'Volume et intérêt ouvert de la jambe la moins liquide, plafonnés à 500 et 1 500.'],
+    ['payoff', 'Profil rendement / risque', payoff, 'Rapport entre le meilleur résultat net à l’échéance et la perte maximale, plafonné à 2,5.'],
+    ['direction', 'Cohérence directionnelle', direction === 'insufficient' ? null : aligned ? 100 : direction === 'mixed' ? 50 : direction === 'neutral' ? 35 : 0, 'Alignement de la stratégie sur la direction de la thèse de recherche.'],
     ['execution', 'Efficacité indicative', Math.max(0, 100 - widestSpread * 3), 'Pénalité de trois points par point de pourcentage de l’écart bid/ask le plus large.'],
     ['quality', 'Qualité des données', quality, 'Fraîcheur et provenance des jambes. Les cotations différées ou attestées manuellement réduisent ce score. En démo, la qualité est simulée.'],
   ];
-  const breakdown = components.map(([key, label, value, reason]) => ({ key, label, value: Math.round(value), weight: mergedWeights[key] * 100 / weightTotal, reason }));
-  return { total: Math.round(breakdown.reduce((sum, row) => sum + row.value * row.weight / 100, 0)), breakdown };
+  const breakdown: ScoreResult['breakdown'] = [];
+  let total = 0;
+  for (const [key, label, value, reason] of components) {
+    if (mergedWeights[key] === 0) continue;
+    if (value === null || !Number.isFinite(value)) return null;
+    const weight = mergedWeights[key] / weightTotal;
+    total += value * weight;
+    breakdown.push({ key, label, value: Math.round(value * 100) / 100, weight: weight * 100, reason });
+  }
+  return { total: Math.round(total), breakdown };
+}
+
+function compareEquivalentQuotes(a: ContractQuote, b: ContractQuote): number {
+  const liquidityFields = (quote: ContractQuote) => Number(quote.volume !== undefined) + Number(quote.openInterest !== undefined);
+  const evidence = ({ status, quoteAt, retrievedAt, source, volume, openInterest }: ContractQuote) => JSON.stringify([
+    status, quoteAt, retrievedAt, source.url, source.publisher, source.method, source.confidence, source.publishedAt, source.citation, volume, openInterest,
+  ]);
+  return Date.parse(b.retrievedAt) - Date.parse(a.retrievedAt) || liquidityFields(b) - liquidityFields(a)
+    || evidence(a).localeCompare(evidence(b));
+}
+
+function limitRankedOpportunities(ranked: Opportunity[]): Opportunity[] {
+  if (ranked.length <= maxOpportunitiesPerSymbol) return ranked;
+  const retained = new Set<Opportunity>();
+  const strategies = new Set<Strategy>();
+  const cohorts = new Set<string>();
+  for (const opportunity of ranked) {
+    if (strategies.has(opportunity.strategy)) continue;
+    strategies.add(opportunity.strategy);
+    cohorts.add(`${opportunity.strategy}:${opportunity.expiration}`);
+    retained.add(opportunity);
+  }
+  for (const opportunity of ranked) {
+    if (retained.size === maxOpportunitiesPerSymbol) break;
+    const cohort = `${opportunity.strategy}:${opportunity.expiration}`;
+    if (cohorts.has(cohort)) continue;
+    cohorts.add(cohort);
+    retained.add(opportunity);
+  }
+  for (const opportunity of ranked) {
+    if (retained.size === maxOpportunitiesPerSymbol) break;
+    retained.add(opportunity);
+  }
+  return ranked.filter((opportunity) => retained.has(opportunity));
 }
 
 export function constructStrategies(quotes: ContractQuote[], preferences: RiskPreferences, context: ConstructionContext): { opportunities: Opportunity[]; rejections: string[] } {
@@ -471,43 +524,49 @@ export function constructStrategies(quotes: ContractQuote[], preferences: RiskPr
   const now = context.now ?? new Date();
   const opportunities: Opportunity[] = [];
   const reasons = new Set<string>();
-  const uniqueQuotes = new Map<string, ContractQuote>();
-  const conflicting = new Map<string, number>();
-  for (const quote of quotes.slice(0, 48)) {
+  const latestQuotes = new Map<string, { quoteTime: number; rows: ContractQuote[] }>();
+  for (const quote of quotes) {
+    if ((quote.status === 'DEMO' && !context.allowDemo) || (candidate.status === 'DEMO' && quote.status !== 'DEMO')) {
+      reasons.add(`${quote.id} · Une cotation fictive ne peut pas être mélangée avec une recherche en direct.`);
+      continue;
+    }
     const validation = validateQuote(quote, candidate.symbol, now);
     if (!validation.valid) {
       reasons.add(`${quote.id} · ${validation.reason}`);
       continue;
     }
     const normalized = { ...quote, id: makeOccSymbol(quote.symbol, quote.expiration, quote.type, quote.strike), status: validation.status };
-    const existing = uniqueQuotes.get(normalized.id);
-    if (existing) {
-      const time = Date.parse(normalized.quoteAt);
-      const previousTime = Date.parse(existing.quoteAt);
-      if (previousTime > time) continue;
-      if (previousTime === time && (existing.bid !== normalized.bid || existing.ask !== normalized.ask || (existing.status === 'DEMO') !== (normalized.status === 'DEMO'))) {
-        conflicting.set(normalized.id, time);
-        reasons.add(`${normalized.id} · cotations contradictoires au même horodatage.`);
-      }
-      if (previousTime === time && Date.parse(existing.retrievedAt) > Date.parse(normalized.retrievedAt)) continue;
-    }
-    uniqueQuotes.set(normalized.id, normalized);
+    const quoteTime = Date.parse(normalized.quoteAt);
+    const existing = latestQuotes.get(normalized.id);
+    if (!existing || quoteTime > existing.quoteTime) latestQuotes.set(normalized.id, { quoteTime, rows: [normalized] });
+    else if (quoteTime === existing.quoteTime) existing.rows.push(normalized);
   }
-  for (const [id, time] of conflicting) {
-    const selected = uniqueQuotes.get(id);
-    if (selected && Date.parse(selected.quoteAt) === time) uniqueQuotes.delete(id);
+  const quoteList: ContractQuote[] = [];
+  for (const [id, { rows }] of latestQuotes) {
+    const [selected] = rows.sort(compareEquivalentQuotes);
+    const priceConflict = rows.some((row) => row.bid !== selected.bid || row.ask !== selected.ask || (row.status === 'DEMO') !== (selected.status === 'DEMO'));
+    const mostRecentRetrieval = rows.filter((row) => Date.parse(row.retrievedAt) === Date.parse(selected.retrievedAt));
+    const liquidityConflict = (['volume', 'openInterest'] as const).some((key) => new Set(mostRecentRetrieval.flatMap((row) => row[key] === undefined ? [] : [row[key]])).size > 1);
+    if (priceConflict || liquidityConflict) reasons.add(`${id} · cotations contradictoires au même horodatage.`);
+    else quoteList.push(selected);
   }
-  if (uniqueQuotes.size === 0) reasons.add('Aucune cotation d’option vérifiée et exploitable pour cette recherche.');
+  if (!quoteList.length) reasons.add('Aucune cotation d’option vérifiée et exploitable pour cette recherche.');
 
-  const quoteList = [...uniqueQuotes.values()];
   const allowed = preferences.strategies ?? defaultRiskPreferences.strategies;
   for (const long of quoteList) {
     const longStrategy: Strategy = long.type === 'call' ? 'long_call' : 'long_put';
     const spreadStrategy: Strategy = long.type === 'call' ? 'bull_call' : 'bear_put';
-    const shortQuotes = quoteList.filter((quote) => quote.expiration === long.expiration && quote.type === long.type && (quote.status === 'DEMO') === (long.status === 'DEMO') && (long.type === 'call' ? quote.strike > long.strike : quote.strike < long.strike)).slice(0, 5);
-    const combinations: [Strategy, ContractQuote[]][] = [[longStrategy, [long]], ...shortQuotes.map((short): [Strategy, ContractQuote[]] => [spreadStrategy, [long, short]])];
+    const combinations: [Strategy, ContractQuote[]][] = [];
+    if (allowed.includes(longStrategy)) combinations.push([longStrategy, [long]]);
+    if (allowed.includes(spreadStrategy)) {
+      for (const short of quoteList) {
+        const compatible = short.expiration === long.expiration && short.type === long.type && (short.status === 'DEMO') === (long.status === 'DEMO')
+          && (long.type === 'call' ? short.strike > long.strike : short.strike < long.strike);
+        if (compatible) combinations.push([spreadStrategy, [long, short]]);
+      }
+    }
+    const spreads: Opportunity[] = [];
     for (const [strategy, legs] of combinations) {
-      if (!allowed.includes(strategy)) continue;
       const input = { strategy, legs, quantity: context.quantity ?? 1, fees: context.fees ?? 0 };
       try {
         const result = calculateStrategy(input);
@@ -517,18 +576,20 @@ export function constructStrategies(quotes: ContractQuote[], preferences: RiskPr
           continue;
         }
         const status = opportunityQuoteStatus(legs);
-        opportunities.push({
+        const opportunity = {
           id: `${strategy}-${legs.map(({ id }) => id).join('-')}`, symbol: candidate.symbol, name: candidate.name, price: candidate.price,
           direction: candidate.direction, strategy, expiration: long.expiration, dte: daysToExpiration(long.expiration, now), input, result,
           score: scoreOpportunity(input, result, candidate.direction, context.weights), status, updatedAt: now.toISOString(), thesis: candidate.thesis,
           warnings: [...risk.warnings, ...(status === 'DEMO' ? [] : ['Cotation de recherche indicative. Confirmez les prix, la séance et les conditions auprès de votre courtier.'])],
-        });
+        };
+        (legs.length > 1 ? spreads : opportunities).push(opportunity);
       } catch (error) {
         reasons.add((error as Error).message);
       }
     }
+    opportunities.push(...spreads.sort(compareOpportunities).slice(0, maxSpreadsPerLongLeg));
   }
-  opportunities.sort((a, b) => (b.score?.total ?? -1) - (a.score?.total ?? -1) || a.result.maxLoss - b.result.maxLoss || a.id.localeCompare(b.id));
+  opportunities.sort(compareOpportunities);
   if (!opportunities.length && !reasons.size) reasons.add('Aucune stratégie autorisée ne peut être construite avec les cotations disponibles.');
-  return { opportunities, rejections: [...reasons].slice(0, 30) };
+  return { opportunities: limitRankedOpportunities(opportunities), rejections: [...reasons].slice(0, 30) };
 }

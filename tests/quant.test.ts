@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeDemoFixtures } from '@/lib/demo';
 import {
-  assessRisk, calculateStrategy, constructStrategies, createPayoffSeries, daysToExpiration,
+  assessRisk, calculateStrategy, compareOpportunities, constructStrategies, createPayoffSeries, daysToExpiration,
   makeOccSymbol, optionTradingCutoff, payoffAt, quotesAreSynchronized, scoreOpportunity, validateQuote, type ContractQuote, type StrategyInput,
 } from '@/lib/quant';
 
@@ -186,6 +186,16 @@ describe('quote verification and ranking', () => {
     expect(risk.reasons.join(' ')).toMatch(/exposition.*positions.*résultats.*volume/);
   });
 
+  it('reports an unknown earnings calendar without treating it as confirmed or disqualifying', () => {
+    const input = bullCall();
+    const preferences = { capital: 10_000, maxRiskPercent: 5, avoidEarnings: true };
+    const risk = assessRisk(input, calculateStrategy(input), preferences, { now });
+    expect(risk.eligible).toBe(true);
+    expect(risk.warnings).toContainEqual(expect.stringContaining('calendrier des résultats est inconnu'));
+    expect(assessRisk(input, calculateStrategy(input), { ...preferences, avoidEarnings: false }, { now }).warnings)
+      .not.toContainEqual(expect.stringContaining('calendrier des résultats est inconnu'));
+  });
+
   it('computes deterministic scores and leaves unavailable components unranked', () => {
     const input = bullCall();
     const result = calculateStrategy(input);
@@ -193,6 +203,97 @@ describe('quote verification and ranking', () => {
     expect(scoreOpportunity(input, result, 'bullish', { liquidity: 100, payoff: 0, direction: 0, execution: 0, quality: 0 })?.total).toBe(100);
     input.legs[0].openInterest = undefined;
     expect(scoreOpportunity(input, result, 'bullish')).toBeNull();
+  });
+
+  it('permits a quality-only score and keeps absent enabled criteria unscored', () => {
+    const input: StrategyInput = {
+      strategy: 'long_call', quantity: 1, fees: 0,
+      legs: [quote('call', 100, 3.05, 3.2, { volume: undefined, openInterest: undefined })],
+    };
+    const result = calculateStrategy(input);
+    const qualityOnly = { liquidity: 0, payoff: 0, direction: 0, execution: 0, quality: 100 };
+    expect(scoreOpportunity(input, result, 'insufficient')).toBeNull();
+    expect(scoreOpportunity(input, result, 'insufficient', { ...qualityOnly, direction: 1 })).toBeNull();
+    expect(scoreOpportunity(input, result, 'insufficient', qualityOnly)).toMatchObject({
+      total: 100, breakdown: [{ key: 'quality', weight: 100, value: 100 }],
+    });
+    input.legs[0].status = 'UNVERIFIED';
+    expect(scoreOpportunity(input, result, 'insufficient', qualityOnly)).toBeNull();
+  });
+
+  it('raises the intended criterion when all other inputs are held constant', () => {
+    const input = bullCall();
+    const base = scoreOpportunity(input, calculateStrategy(input), 'bullish')!;
+    const higherCost = { ...input, fees: 64 };
+    const higherCostScore = scoreOpportunity(higherCost, calculateStrategy(higherCost), 'bullish')!;
+    expect(higherCostScore.total).toBeLessThan(base.total);
+    expect(higherCostScore.breakdown.filter(({ key }) => key !== 'payoff')).toEqual(base.breakdown.filter(({ key }) => key !== 'payoff'));
+
+    const narrower = { ...input, legs: [{ ...input.legs[0], bid: 3.19 }, { ...input.legs[1], ask: 1.41 }] };
+    const narrowerScore = scoreOpportunity(narrower, calculateStrategy(narrower), 'bullish')!;
+    expect(narrowerScore.total).toBeGreaterThan(base.total);
+    expect(narrowerScore.breakdown.filter(({ key }) => key !== 'execution')).toEqual(base.breakdown.filter(({ key }) => key !== 'execution'));
+
+    const thinner = { ...input, legs: [{ ...input.legs[0], volume: 20, openInterest: 40 }, input.legs[1]] };
+    const thinnerScore = scoreOpportunity(thinner, calculateStrategy(thinner), 'bullish')!;
+    expect(thinnerScore.total).toBeLessThan(base.total);
+    expect(thinnerScore.breakdown.filter(({ key }) => key !== 'liquidity')).toEqual(base.breakdown.filter(({ key }) => key !== 'liquidity'));
+  });
+
+  it('selects the best admissible short legs from a captured chain regardless of feed order', () => {
+    const candidate = { ...makeDemoFixtures(now).candidates.find(({ symbol }) => symbol === 'SPY')!, status: 'UNVERIFIED' as const };
+    const [long] = bullCall().legs;
+    const earlierInvalidRows = Array.from({ length: 48 }, (_, index) => quote('call', 120 + index, .21, .24, { multiplier: 10 }));
+    const shorts = [[103, 2.15, 2.24], [104, 1.6, 1.68], [105, 1.25, 1.3], [106, .99, 1.02], [107, .73, .77], [108, .60, .62], [109, .55, .56]]
+      .map(([strike, bid, ask]) => quote('call', strike, bid, ask, { volume: strike === 109 ? 1000 : 50 }));
+    const chain = [...earlierInvalidRows, long, ...shorts];
+    const preferences = { capital: 10_000, maxRiskPercent: 5, strategies: ['bull_call' as const] };
+    const context = { candidate, now, weights: { liquidity: 100, payoff: 0, direction: 0, execution: 0, quality: 0 } };
+    const fromLong = (items: ReturnType<typeof constructStrategies>['opportunities']) => items.filter((item) => item.input.legs[0].id === long.id);
+    const records = fromLong(constructStrategies(chain, preferences, context).opportunities);
+    expect(records).toHaveLength(5);
+    expect(records[0]?.input.legs[1].strike).toBe(109);
+    expect(fromLong(constructStrategies([...chain].reverse(), preferences, context).opportunities)).toEqual(records);
+
+    const [best, next] = records;
+    expect(compareOpportunities(best, next)).toBeLessThan(0);
+    expect(compareOpportunities({ ...best, score: null }, next)).toBeGreaterThan(0);
+    expect(compareOpportunities({ ...next, symbol: 'AMD' }, next)).toBeLessThan(0);
+  });
+
+  it('replays a dated snapshot without using unavailable or expired quote evidence', () => {
+    const candidate = { ...makeDemoFixtures(now).candidates.find(({ symbol }) => symbol === 'SPY')!, status: 'UNVERIFIED' as const };
+    const [long, short] = bullCall().legs;
+    const unavailableAtCapture = { ...short, bid: 1.45, quoteAt: '2026-06-01T14:56:00Z', retrievedAt: '2026-06-01T15:05:00Z' };
+    const preferences = { capital: 10_000, maxRiskPercent: 5, strategies: ['bull_call' as const] };
+    const captured = constructStrategies([long, short, unavailableAtCapture], preferences, { candidate, now });
+    expect(captured.opportunities[0]).toMatchObject({ result: { entryDebit: 180 }, updatedAt: now.toISOString() });
+    const newer = constructStrategies([long, short, unavailableAtCapture], preferences, { candidate, now: new Date('2026-06-01T15:10:00Z') });
+    expect(newer.opportunities[0]?.result.entryDebit).toBe(175);
+    const expired = constructStrategies([long, short], preferences, { candidate, now: new Date('2026-06-19T15:00:00Z') });
+    expect(expired.opportunities).toHaveLength(0);
+    expect(captured.opportunities[0]?.result.entryDebit).toBe(180);
+  });
+
+  it('preserves representatives across ranked strategies and expiries when limiting saved results', () => {
+    const candidate = { ...makeDemoFixtures(now).candidates.find(({ symbol }) => symbol === 'SPY')!, status: 'UNVERIFIED' as const };
+    const expiries = [expiration, '2026-06-26', '2026-06-29'];
+    const types = ['call', 'put'] as const;
+    const chain = expiries.flatMap((expiry) => types.flatMap((type) => Array.from({ length: 12 }, (_, index) => {
+      const strike = 95 + index;
+      const bid = (100 + (type === 'call' ? 11 - index : index) * 13) / 100;
+      return quote(type, strike, bid, bid + 0.05, { expiration: expiry, id: makeOccSymbol('SPY', expiry, type, strike) });
+    })));
+    const context = { candidate, now };
+    const preferences = { capital: 10_000, maxRiskPercent: 5 };
+    const results = constructStrategies(chain, preferences, context).opportunities;
+    expect(results).toHaveLength(60);
+    expect(results).toEqual([...results].sort(compareOpportunities));
+    for (const expiry of expiries) {
+      expect(new Set(results.filter((item) => item.expiration === expiry).map((item) => item.strategy)))
+        .toEqual(new Set(['bull_call', 'bear_put', 'long_call', 'long_put']));
+    }
+    expect(constructStrategies([...chain].reverse(), preferences, context).opportunities).toEqual(results);
   });
 
   it('handles identical duplicates, conflicting quotes and no-trade results', () => {
@@ -208,6 +309,12 @@ describe('quote verification and ranking', () => {
     const newQuote = { ...long, ask: 3.15, quoteAt: '2026-06-01T14:56:00Z' };
     const recovered = constructStrategies([long, short, { ...long, ask: 3.3 }, newQuote], { ...prefs, strategies: [...prefs.strategies] }, { candidate, now });
     expect(recovered.opportunities[0]?.input.legs[0].ask).toBe(3.15);
+    const missingMetadata = { ...long, volume: undefined };
+    const metadataConflict = { ...long, volume: 350 };
+    const conflicted = [missingMetadata, metadataConflict, long, short];
+    const context = { candidate, now };
+    expect(constructStrategies(conflicted, { ...prefs, strategies: [...prefs.strategies] }, context).opportunities).toHaveLength(0);
+    expect(constructStrategies([...conflicted].reverse(), { ...prefs, strategies: [...prefs.strategies] }, context).opportunities).toHaveLength(0);
     expect(constructStrategies([], { ...prefs, strategies: [...prefs.strategies] }, { candidate, now }).rejections[0]).toContain('Aucune cotation');
   });
 
@@ -223,5 +330,6 @@ describe('quote verification and ranking', () => {
     expect(live.opportunities).toHaveLength(0);
     expect(live.rejections.join(' ')).toContain('fictive');
     expect(constructStrategies(bullCall().legs, prefs, { candidate, now }).opportunities).toHaveLength(0);
+    expect(constructStrategies(bullCall().legs, prefs, { candidate, now, allowDemo: true }).opportunities).toHaveLength(0);
   });
 });

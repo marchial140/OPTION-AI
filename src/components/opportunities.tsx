@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { payoffAt, strategyLabels, type Opportunity, type ResearchCandidate } from "@/lib/quant";
+import { compareOpportunities, payoffAt, strategyLabels, type Opportunity, type ResearchCandidate } from "@/lib/quant";
 import type { AppState } from "@/lib/workspace";
 
 const usdFormat = new Intl.NumberFormat("fr-CA", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 2 });
@@ -151,9 +151,10 @@ export function OpportunityTable({ opportunities, compact, columns, checked, onC
   const [pagination, setPagination] = useState({ scope: scopeKey, index: 0 });
   const visibleColumns = fullColumns.filter(({ key }) => (compact ? compactColumns : columns ?? initialColumns).includes(key));
   const sorted = useMemo(() => [...opportunities].sort((a, b) => {
+    if (sort.key === "score" && sort.desc) return compareOpportunities(a, b);
     const first = sortValue(a, sort.key);
     const second = sortValue(b, sort.key);
-    if (first === second) return 0;
+    if (first === second) return compareOpportunities(a, b);
     if (first === null || second === null) return first === null ? 1 : -1;
     const comparison = typeof first === "number" && typeof second === "number" ? first - second : String(first).localeCompare(String(second), "fr");
     return sort.desc ? -comparison : comparison;
