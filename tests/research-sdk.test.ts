@@ -100,6 +100,7 @@ describe("official SDK request and response contract", () => {
     expected: "completed" },
     { label: "no matching symbol", format: () => JSON.stringify({ ...analysis, ticker: "AMD" }), expected: "failed", field: "ne correspond au symbole demandé" },
     { label: "too many objects", format: (body: string) => Array(33).fill(body).join("\n"), expected: "failed", field: "trop d’objets" },
+    { label: "a missing array value", format: (body: string) => body.slice(0, -1) + ',"news":[,]}', expected: "failed", field: "plafond de requêtes par symbole" },
     { label: "invalid quote types", format: () => JSON.stringify({ ...analysis, underlyingQuote: { price: "123", currency: "USD", source } }), expected: "failed", field: "underlyingQuote" },
   ])("validates $label", async ({ format, expected, field }) => {
     const payload = { ticker: "NVDA", companyName: "NVIDIA", direction: "bullish", thesis: analysis.thesis };
@@ -112,7 +113,7 @@ describe("official SDK request and response contract", () => {
         message("final_answer", [text(format(JSON.stringify(payload)), [citation])]),
       ],
     })));
-    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live" });
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 1 });
     expect(result.status).toBe(expected);
     expect(result.requestCount).toBe(1);
     if (expected === "completed") {
@@ -166,7 +167,7 @@ describe("official SDK request and response contract", () => {
   });
 
   function unreadableResearch(url = secUrl, withToolSources = false) {
-    const answer = JSON.stringify(analysis).slice(0, -1) + ",}";
+    const answer = JSON.stringify(analysis).replace('"ticker":"NVDA"', '"ticker":NVDA');
     return json({
       id: "resp_unreadable", status: "completed",
       usage: { input_tokens: 100, output_tokens: 30 },
@@ -181,6 +182,27 @@ describe("official SDK request and response contract", () => {
       ],
     });
   }
+
+  it("removes trailing commas locally without modifying quoted claim text", async () => {
+    const claim = { text: 'Le rapport utilise le libellé « note,} ».', source };
+    const body = JSON.stringify({ ...analysis, thesis: claim })
+      .replace('"source":' + JSON.stringify(source) + '}', '"source":' + JSON.stringify(source) + ',}')
+      .replace('],"bearishFactors"', ',],"bearishFactors"');
+    const answer = "Rapport\n```json\n" + body.slice(0, -1) + ",}\n```";
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(json({
+      status: "completed", usage: { input_tokens: 100, output_tokens: 30 },
+      output: [
+        { type: "web_search_call", status: "completed", action: { type: "search", sources: [{ type: "url", url: secUrl }] } },
+        message("final_answer", [text(answer)]),
+      ],
+    }));
+    vi.stubGlobal("fetch", fetch);
+
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 1 });
+
+    expect(result).toMatchObject({ status: "completed", requestCount: 1, candidate: { thesis: claim.text, price: null } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 
   it("repairs malformed research once without search and keeps only original citations", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>()
@@ -218,7 +240,7 @@ describe("official SDK request and response contract", () => {
     expect(body).not.toHaveProperty("tools");
     expect(body).not.toHaveProperty("max_tool_calls");
     expect(body.text.format.schema.properties.bullishFactors).not.toHaveProperty("default");
-    expect(JSON.parse(body.input)).toMatchObject({ sourceUrls: [secUrl], answer: expect.stringContaining('"ticker":"NVDA"') });
+    expect(JSON.parse(body.input)).toMatchObject({ sourceUrls: [secUrl], answer: expect.stringContaining('"ticker":NVDA') });
   });
 
   it.each([
@@ -248,6 +270,26 @@ describe("official SDK request and response contract", () => {
     const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 3 });
 
     expect(result).toMatchObject({ status: "failed", requestCount: 2, error: expect.stringContaining("Reformatage de la réponse Web") });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves Web sources and the retry delay when reformatting is rate-limited", async () => {
+    vi.stubEnv("AI_MAX_RETRIES", "2");
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(unreadableResearch())
+      .mockResolvedValueOnce(Response.json({
+        error: { code: "rate_limit_exceeded", message: "Raw provider data" },
+      }, { status: 429, headers: { "Retry-After": "1.25" } }));
+    vi.stubGlobal("fetch", fetch);
+
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 3 });
+
+    expect(result).toMatchObject({
+      status: "failed", requestCount: 2, estimatedCost: 0.01016, candidate: null, opportunities: [],
+      error: "Reformatage de la réponse Web · OpenAI limite les requêtes. Réessayez dans au moins 2 s.",
+      examinedSources: [expect.objectContaining({ url: secUrl, citation: "Source originale" })],
+    });
+    expect(JSON.stringify(result)).not.toContain("Raw provider data");
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 

@@ -9,17 +9,19 @@ const owner = { id: 'acbc070f-08da-4280-b3da-3bf41690d7b8', email: 'scanner@exam
 const now = '2026-07-21T15:34:00.000Z';
 const source = { url: 'https://www.sec.gov/Archives/edgar/data/nvda.htm', publishedAt: null };
 const issuer = { url: 'https://investor.nvidia.com/news/latest-release', publishedAt: null };
+const failedSource = 'https://www.sec.gov/Archives/edgar/data/msft.htm';
+const failedPublisher = 'https://www.reuters.com/markets/us/msft-research/';
 const thesis = 'Le rapport de l’émetteur indique une demande soutenue.';
 const quoteAt = '2026-07-21T15:30:00.000Z';
 
-function optionsResponses(body: unknown) {
+function optionsResponses(body: unknown, sources = [source.url, issuer.url]) {
   return Response.json({
     object: 'response',
     status: 'completed',
     output: [
       {
         type: 'web_search_call', status: 'completed',
-        action: { type: 'search', sources: [source.url, issuer.url].map((url) => ({ type: 'url', url })) },
+        action: { type: 'search', sources: sources.map((url) => ({ type: 'url', url })) },
       },
       {
         type: 'message', role: 'assistant', status: 'completed', phase: 'final_answer',
@@ -58,7 +60,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('runs an authenticated live scan through Next, persists sources and metering, and stops at the budget limit', async () => {
+it('persists authenticated scanner results, sources and usage through success, reformat limits, and budget limits', async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(now));
   for (const [name, value] of Object.entries({
@@ -149,6 +151,18 @@ it('runs an authenticated live scan through Next, persists sources and metering,
           volume: 900, openInterest: 3000, source,
         }],
       });
+      if (providerCalls.length === 3) {
+        const malformed = JSON.stringify({
+          ticker: 'MSFT',
+          companyName: 'Microsoft',
+          direction: 'bullish',
+          thesis: { text: 'La thèse illisible demeure non publiée.', source: { url: failedSource } },
+        }).replace('"MSFT"', 'MSFT');
+        return optionsResponses(malformed, [failedSource, failedPublisher, 'https://unverified.example.test/msft']);
+      }
+      if (providerCalls.length === 4) return Response.json({
+        error: { message: 'Private mock provider detail', type: 'rate_limit_error', code: 'rate_limit_exceeded' },
+      }, { status: 429, headers: { 'Retry-After': '60' } });
     }
     unexpected.push(request.method + ' ' + url.origin + url.pathname);
     throw new Error('Unexpected outbound request in the offline scanner test.');
@@ -201,11 +215,40 @@ it('runs an authenticated live scan through Next, persists sources and metering,
 
   const replay = await result<{ scan: Scan }>(await call('POST', 'scans', scanInput), 202);
   expect(replay.scan.id).toBe(scan.id);
+  const unreadable = await result<{ scan: Scan }>(await call('POST', 'scans', { cookie, data: { type: 'quick', tickers: ['MSFT'] } }), 202);
+  const { scan: limited } = await result<{ scan: Scan }>(await call('POST', `scans/${unreadable.scan.id}/advance`, { cookie }));
+  expect(limited).toMatchObject({
+    status: 'failed', completed: [], failed: ['MSFT'], candidates: [], opportunities: [],
+    requestCount: 2, estimatedCost: 0.01015,
+  });
+  expect(limited.rejections).toEqual(expect.arrayContaining([
+    expect.objectContaining({ symbol: 'MSFT', reason: expect.stringMatching(/reformatage.*limite/iu) }),
+  ]));
+  expect(JSON.stringify(limited)).not.toMatch(/thèse illisible|Private mock provider detail/iu);
+  expect(providerCalls).toHaveLength(4);
+  expect(providerCalls[2]).toMatchObject({ tools: [{ type: 'web_search' }], tool_choice: 'required' });
+  expect(providerCalls[3]).toMatchObject({ store: false, text: { format: { type: 'json_schema' } } });
+  expect(providerCalls[3]).not.toHaveProperty('tools');
+
+  const afterLimit = await result<AppState>(await call('GET', 'state', { cookie }));
+  expect(afterLimit.scans[0]).toEqual(limited);
+  expect(afterLimit.scans[0].examinedSources).toEqual([
+    expect.objectContaining({ url: failedSource, publisher: 'SEC', retrievedAt: now }),
+    expect.objectContaining({ url: failedPublisher, publisher: 'Reuters', retrievedAt: now }),
+  ]);
+  expect(afterLimit.candidates.map(({ symbol }) => symbol)).toEqual(['NVDA']);
+  expect(afterLimit.cost).toMatchObject({ daily: 0.03045, monthly: 0.03045, requests: 4, searches: 3, pending: 0 });
+  expect(stored?.value.usage.filter(({ scanId }) => scanId === limited.id)).toEqual([
+    expect.objectContaining({ inputTokens: 100, outputTokens: 50, searchUsage: 1, estimatedCost: 0.01015 }),
+    expect.objectContaining({ inputTokens: 0, outputTokens: 0, searchUsage: 0, estimatedCost: 0 }),
+  ]);
+  expect(stored?.value.reservations).toEqual([]);
+
   await result(await call('PATCH', 'settings', { cookie, data: { dailyBudget: 0 } }));
   const blocked = await result<{ scan: Scan }>(await call('POST', 'scans', { cookie, data: { type: 'quick', tickers: ['AMD'] } }), 202);
   const { scan: failed } = await result<{ scan: Scan }>(await call('POST', `scans/${blocked.scan.id}/advance`, { cookie }));
   expect(failed).toMatchObject({ status: 'failed', failed: ['AMD'], candidates: [], opportunities: [], requestCount: 0 });
   expect(failed.rejections).toEqual(expect.arrayContaining([expect.objectContaining({ reason: expect.stringMatching(/budget/iu) })]));
-  expect(providerCalls).toHaveLength(2);
+  expect(providerCalls).toHaveLength(4);
   expect(unexpected).toEqual([]);
 });

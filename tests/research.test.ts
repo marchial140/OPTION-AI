@@ -278,6 +278,7 @@ describe("web research", () => {
     { status: 403, message: "accès requis" },
     { status: 404, message: "introuvable" },
     { status: 429, code: "insufficient_quota", message: "quota de facturation" },
+    { status: 429, code: "billing_hard_limit_reached", message: "quota de facturation" },
   ])("does not retry or reserve uncertain usage for a definite provider rejection", async ({ status, code, message }) => {
     createResponse.mockRejectedValueOnce({ status, code, message: "API error with internal details" });
     const recordUsage = vi.fn<(usage: ResearchUsage) => Promise<void>>(async () => {});

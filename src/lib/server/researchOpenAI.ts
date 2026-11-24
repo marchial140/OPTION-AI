@@ -125,14 +125,17 @@ function classifyProviderError(error: unknown, signal?: AbortSignal) {
     ? error as { status?: number; name?: string; code?: string; param?: string; headers?: Headers }
     : {};
   if (data.status === 429) {
-    if (data.code === "insufficient_quota") {
+    if (data.code === "insufficient_quota" || data.code === "billing_hard_limit_reached") {
       return { error: new ResearchError("QUOTA", "Le compte OpenAI a atteint son quota de facturation."), retry: false, uncertain: false };
     }
     const retryAfter = data.headers?.get?.("retry-after");
     const waitSeconds = retryAfter && /^\d+(?:\.\d+)?$/.test(retryAfter) ? Number(retryAfter) :
       retryAfter ? Math.max(0, (Date.parse(retryAfter) - Date.now()) / 1000) : 0;
+    const retryGuidance = waitSeconds > 0 && waitSeconds <= 86_400
+      ? `Réessayez dans au moins ${Math.ceil(waitSeconds)} s.`
+      : "Réessayez ultérieurement.";
     return {
-      error: new ResearchError("RATE_LIMIT", "OpenAI limite les requêtes. Réessayez ultérieurement."),
+      error: new ResearchError("RATE_LIMIT", "OpenAI limite les requêtes. " + retryGuidance),
       retry: waitSeconds <= 2,
       waitMs: Number.isFinite(waitSeconds) ? waitSeconds * 1000 : 0,
       uncertain: false,
@@ -203,9 +206,25 @@ function completedText(response: Response) {
   return text;
 }
 
+function parseWebJsonValue(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Match quoted strings as whole tokens so commas inside field values are preserved.
+    const withoutTrailingCommas = text.replace(/"(?:[^"\\]|\\[\s\S])*"|,(?=[ \t\r\n]*[}\]])/g,
+      (token, offset: number) => {
+        if (token !== ",") return token;
+        let previous = offset - 1;
+        while (previous >= 0 && /[ \t\r\n]/.test(text[previous])) previous -= 1;
+        return /["\]}0-9el]/.test(text.charAt(previous)) ? "" : token;
+      });
+    return JSON.parse(withoutTrailingCommas);
+  }
+}
+
 function parseWebResearchJson(text: string): unknown[] {
   try {
-    const json: unknown = JSON.parse(text);
+    const json = parseWebJsonValue(text);
     return Array.isArray(json) ? json : [json];
   } catch {
     // Look for complete objects in both fenced and plain research text.
@@ -220,7 +239,7 @@ function parseWebResearchJson(text: string): unknown[] {
         depth -= 1;
         if (depth === 0) {
           try {
-            objects.push(JSON.parse(text.slice(start, token.index + 1)));
+            objects.push(parseWebJsonValue(text.slice(start, token.index + 1)));
           } catch {
             // A brace-delimited fragment may be prose rather than a JSON object.
           }
@@ -416,8 +435,9 @@ export async function openAIRequest<Schema extends ZodType>(
     if (sources.size === 0) {
       throw new ResearchError("NO_SOURCES", "Le format de la réponse Web est invalide et aucune source reconnue n’a été retracée.");
     }
+    const examinedSources = [...sources.values()];
     if (input.usages.length >= input.maxRequests) {
-      throw new ResearchError("BUDGET", "Le format de la réponse Web est invalide et le plafond de requêtes par symbole empêche son reformatage.");
+      throw new ResearchError("BUDGET", "Le format de la réponse Web est invalide et le plafond de requêtes par symbole empêche son reformatage.", examinedSources);
     }
 
     try {
@@ -434,7 +454,7 @@ export async function openAIRequest<Schema extends ZodType>(
       return { data: repaired.data, response };
     } catch (repairError) {
       if (repairError instanceof ResearchError) {
-        throw new ResearchError(repairError.code, "Reformatage de la réponse Web · " + repairError.message);
+        throw new ResearchError(repairError.code, "Reformatage de la réponse Web · " + repairError.message, examinedSources);
       }
       throw repairError;
     }

@@ -54,6 +54,8 @@ External pages are research inputs. The request instructions tell the model to i
 
 Scan requests ask OpenAI for the search tool's source list, which can supply evidence even when the message has no citation annotations. When a completed Web response has recognized sources but unreadable JSON, the server can make one structured reformatting request without Web search. It counts against the same request, cost, and timeout limits, and can add model token charges. Evidence is still checked against the original Web response. The scan report indicates whether missing sources, ambiguous JSON, a request limit, or an unsuccessful reformatting step prevented recovery.
 
+The parser removes trailing commas outside JSON strings locally. If reformatting is still required and blocked, the report preserves the recognized sources from the completed search. A rate limit during reformatting does not trigger another reformatting request. When OpenAI supplies a retry delay, the error can show that delay.
+
 Screening discards malformed optional qualitative observations individually. Remaining observations still require attributable sources, and the underlying quote, ticker, and direction are validated separately.
 
 When a Web answer contains multiple JSON objects, the scanner validates complete objects against the requested symbol and schema. Equivalent objects count as one result. An existing result can fill empty fields in other results without changing populated fields. If no result preserves every populated field, the scan report records the conflict and any recognized sources from the original response. This selection does not make an extra API request.
