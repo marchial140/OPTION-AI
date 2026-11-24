@@ -80,14 +80,14 @@ describe("official SDK request and response contract", () => {
       instructions: expect.stringContaining('"underlyingQuote"'),
     });
     expect(body.tools).toEqual([{ type: "web_search" }]);
-    expect(body).not.toHaveProperty("include");
+    expect(body.include).toEqual(["web_search_call.action.sources"]);
     expect(body).not.toHaveProperty("text");
   });
 
   it.each([
     { label: "fenced JSON between prose and a citation", format: (body: string) => "Analyse NVDA\n\n```json\n" + body + "\n```\n\nSource : SEC", expected: "completed" },
     { label: "bare JSON between prose and a citation", format: (body: string) => "Analyse NVDA\n" + body + "\nSource : SEC", expected: "completed" },
-    { label: "ambiguous JSON", format: (body: string) => body + "\n" + body, expected: "failed" },
+    { label: "ambiguous JSON", format: (body: string) => body + "\n" + body, expected: "failed", field: "plusieurs objets JSON" },
     { label: "invalid quote types", format: () => JSON.stringify({ ...analysis, underlyingQuote: { price: "123", currency: "USD", source } }), expected: "failed", field: "underlyingQuote" },
   ])("validates $label", async ({ format, expected, field }) => {
     const payload = { ticker: "NVDA", companyName: "NVIDIA", direction: "bullish", thesis: analysis.thesis };
@@ -110,14 +110,17 @@ describe("official SDK request and response contract", () => {
     }
   });
 
-  function unreadableResearch(url = secUrl) {
+  function unreadableResearch(url = secUrl, withToolSources = false) {
     const answer = JSON.stringify(analysis).slice(0, -1) + ",}";
     return json({
       id: "resp_unreadable", status: "completed",
       usage: { input_tokens: 100, output_tokens: 30 },
       output: [
-        { type: "web_search_call", status: "completed", id: "ws_unreadable", action: { type: "search" } },
-        message("final_answer", [text(answer, [{
+        {
+          type: "web_search_call", status: "completed", id: "ws_unreadable",
+          action: { type: "search", ...(withToolSources ? { sources: [{ type: "url", url }] } : {}) },
+        },
+        message("final_answer", [text(answer, withToolSources ? [] : [{
           type: "url_citation", url, title: "Source originale", start_index: 0, end_index: 10,
         }])]),
       ],
@@ -126,7 +129,10 @@ describe("official SDK request and response contract", () => {
 
   it("repairs malformed research once without search and keeps only original citations", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(unreadableResearch())
+      .mockImplementationOnce(async (_url, options) => {
+        const body = JSON.parse(String(options?.body));
+        return unreadableResearch(secUrl, body.include?.includes("web_search_call.action.sources"));
+      })
       .mockResolvedValueOnce(json({
         id: "resp_repair", status: "completed",
         usage: { input_tokens: 200, output_tokens: 60 },
@@ -144,7 +150,7 @@ describe("official SDK request and response contract", () => {
     });
 
     expect(result).toMatchObject({ status: "completed", requestCount: 2, estimatedCost: 0.01048, opportunities: [] });
-    expect(result.candidate?.sources).toEqual([expect.objectContaining({ url: secUrl, citation: "Source originale" })]);
+    expect(result.candidate?.sources).toEqual([expect.objectContaining({ url: secUrl, publisher: "SEC" })]);
     expect(result.candidate?.evidence?.map(({ kind }) => kind)).toEqual(["thesis", "bullish"]);
     expect(allowRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({ requestType: "screen", estimatedSearches: 0 }));
     expect(recordUsage).toHaveBeenNthCalledWith(2, expect.objectContaining({ searchUsage: 0, estimatedCost: 0.00032 }));
@@ -161,10 +167,10 @@ describe("official SDK request and response contract", () => {
   });
 
   it.each([
-    { label: "the request cap has been reached", maxRequests: 1, url: secUrl, budgetAllowsRepair: true },
-    { label: "the budget denies the follow-up", maxRequests: 2, url: secUrl, budgetAllowsRepair: false },
-    { label: "the Web response lacks a recognized source", maxRequests: 2, url: "https://example.com/nvda", budgetAllowsRepair: true },
-  ])("makes no second request when $label", async ({ maxRequests, url, budgetAllowsRepair }) => {
+    { label: "the request cap has been reached", maxRequests: 1, url: secUrl, budgetAllowsRepair: true, reason: "plafond de requêtes par symbole" },
+    { label: "the budget denies the follow-up", maxRequests: 2, url: secUrl, budgetAllowsRepair: false, reason: "Reformatage de la réponse Web · Budget" },
+    { label: "the Web response lacks a recognized source", maxRequests: 2, url: "https://example.com/nvda", budgetAllowsRepair: true, reason: "aucune source reconnue" },
+  ])("makes no second request when $label", async ({ maxRequests, url, budgetAllowsRepair, reason }) => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(unreadableResearch(url));
     vi.stubGlobal("fetch", fetch);
     const allowRequest = vi.fn(async () => budgetAllowsRepair).mockResolvedValueOnce(true);
@@ -173,7 +179,7 @@ describe("official SDK request and response contract", () => {
       symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests, allowRequest,
     });
 
-    expect(result).toMatchObject({ status: "failed", requestCount: 1, estimatedCost: 0.01016 });
+    expect(result).toMatchObject({ status: "failed", requestCount: 1, estimatedCost: 0.01016, error: expect.stringContaining(reason) });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -186,7 +192,7 @@ describe("official SDK request and response contract", () => {
 
     const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 3 });
 
-    expect(result).toMatchObject({ status: "failed", requestCount: 2 });
+    expect(result).toMatchObject({ status: "failed", requestCount: 2, error: expect.stringContaining("Reformatage de la réponse Web") });
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 

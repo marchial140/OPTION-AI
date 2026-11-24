@@ -52,7 +52,7 @@ The server uses the official JavaScript SDK and a configured model. Research req
 
 External pages are research inputs. The request instructions tell the model to ignore commands in those inputs. The tool surface is limited to search during research and the model never receives database or shell access. See [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) and [web search](https://platform.openai.com/docs/guides/tools-web-search).
 
-When a completed Web response has recognized sources but unreadable JSON, the server can make one structured reformatting request without Web search. It counts against the same request, cost, and timeout limits, and can add model token charges. Evidence is still checked against the original Web response.
+Scan requests ask OpenAI for the search tool's source list, which can supply evidence even when the message has no citation annotations. When a completed Web response has recognized sources but unreadable JSON, the server can make one structured reformatting request without Web search. It counts against the same request, cost, and timeout limits, and can add model token charges. Evidence is still checked against the original Web response. The scan report indicates whether missing sources, ambiguous JSON, a request limit, or an unsuccessful reformatting step prevented recovery.
 
 ### Configuration and estimated costs
 
