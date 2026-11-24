@@ -56,6 +56,8 @@ Scan requests ask OpenAI for the search tool's source list, which can supply evi
 
 Screening discards malformed optional qualitative observations individually. Remaining observations still require attributable sources, and the underlying quote, ticker, and direction are validated separately.
 
+When a Web answer contains multiple JSON objects, the scanner validates complete objects against the requested symbol and schema. Equivalent objects count as one result. An existing result can fill empty fields in other results without changing populated fields. If no result preserves every populated field, the scan report records the conflict and any recognized sources from the original response. This selection does not make an extra API request.
+
 ### Configuration and estimated costs
 
 Set `OPENAI_MODEL` to a model with web search and structured output enabled for the project. Configure `AI_INPUT_USD_PER_MILLION`, `AI_OUTPUT_USD_PER_MILLION`, and `AI_SEARCH_USD_PER_CALL` for the configured model and tool. A separate `OPENAI_DEEP_MODEL` requires `AI_DEEP_INPUT_USD_PER_MILLION` and `AI_DEEP_OUTPUT_USD_PER_MILLION`. Use rates applicable to your account and model. See [OpenAI API pricing](https://openai.com/api/pricing/).

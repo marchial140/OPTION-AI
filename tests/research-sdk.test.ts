@@ -87,7 +87,19 @@ describe("official SDK request and response contract", () => {
   it.each([
     { label: "fenced JSON between prose and a citation", format: (body: string) => "Analyse NVDA\n\n```json\n" + body + "\n```\n\nSource : SEC", expected: "completed" },
     { label: "bare JSON between prose and a citation", format: (body: string) => "Analyse NVDA\n" + body + "\nSource : SEC", expected: "completed" },
-    { label: "ambiguous JSON", format: (body: string) => body + "\n" + body, expected: "failed", field: "plusieurs objets JSON" },
+    { label: "duplicate JSON", format: (body: string) => body + "\n" + body, expected: "completed" },
+    { label: "equivalent fenced and bare JSON", format: (body: string) => "```json\n" + body + "\n```\n" + JSON.stringify({
+      direction: "bullish", companyName: "NVIDIA", ticker: " nvda ", thesis: analysis.thesis, news: [],
+    }), expected: "completed" },
+    { label: "a schema example beside the analysis", format: (body: string) => '{"ticker":"NVDA","type":"example"}\n' + body, expected: "completed" },
+    { label: "another symbol beside the analysis", format: (body: string) => JSON.stringify([{
+      ...analysis, ticker: "AMD", direction: "bearish",
+    }, JSON.parse(body)]), expected: "completed" },
+    { label: "one relevant object with escaped quotation marks and braces", format: (body: string) => "Intro {reference}\n" +
+      JSON.stringify({ ...JSON.parse(body), thesis: { text: 'L’annonce « produit » est un "catalyseur {conditionnel}".', source } }),
+    expected: "completed" },
+    { label: "no matching symbol", format: () => JSON.stringify({ ...analysis, ticker: "AMD" }), expected: "failed", field: "ne correspond au symbole demandé" },
+    { label: "too many objects", format: (body: string) => Array(33).fill(body).join("\n"), expected: "failed", field: "trop d’objets" },
     { label: "invalid quote types", format: () => JSON.stringify({ ...analysis, underlyingQuote: { price: "123", currency: "USD", source } }), expected: "failed", field: "underlyingQuote" },
   ])("validates $label", async ({ format, expected, field }) => {
     const payload = { ticker: "NVDA", companyName: "NVIDIA", direction: "bullish", thesis: analysis.thesis };
@@ -108,6 +120,49 @@ describe("official SDK request and response contract", () => {
     } else {
       expect(result.error).toContain(field ?? "réponse illisible");
     }
+  });
+
+  it("keeps an existing more complete result that agrees with the shorter result", async () => {
+    const { bullishFactors, ...shorter } = analysis;
+    vi.stubGlobal("fetch", vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(json({
+      status: "completed",
+      usage: { input_tokens: 100, output_tokens: 30 },
+      output: [
+        { type: "web_search_call", status: "completed", action: { type: "search", sources: [{ type: "url", url: secUrl }] } },
+        message("final_answer", [text(JSON.stringify(shorter) + "\n" + JSON.stringify(analysis))]),
+      ],
+    })));
+
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 1 });
+
+    expect(result).toMatchObject({
+      status: "completed", requestCount: 1, candidate: {
+        direction: "bullish", bullishFactors: bullishFactors.map(({ text }) => text),
+      },
+    });
+  });
+
+  it("withholds conflicting answers even when only one is fenced and keeps the original sources", async () => {
+    const conflicting = { ...analysis, direction: "bearish" };
+    const answer = "```json\n" + JSON.stringify(analysis) + "\n```\n" + JSON.stringify(conflicting);
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(json({
+      status: "completed",
+      usage: { input_tokens: 100, output_tokens: 30 },
+      output: [
+        { type: "web_search_call", status: "completed", action: { type: "search", sources: [{ type: "url", url: secUrl }] } },
+        message("final_answer", [text(answer)]),
+      ],
+    }));
+    vi.stubGlobal("fetch", fetch);
+
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 2 });
+
+    expect(result).toMatchObject({
+      status: "failed", candidate: null, opportunities: [], requestCount: 1, estimatedCost: 0.01016,
+      error: expect.stringContaining("des analyses différentes pour le même symbole"),
+      examinedSources: [expect.objectContaining({ url: secUrl, publisher: "SEC" })],
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   function unreadableResearch(url = secUrl, withToolSources = false) {

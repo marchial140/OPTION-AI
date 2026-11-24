@@ -1,7 +1,9 @@
+import { isDeepStrictEqual } from "node:util";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { Response } from "openai/resources/responses/responses";
 import { z, type ZodType, type output } from "zod";
+import type { EvidenceSource } from "../quant";
 import { gatherSources } from "./researchEvidence";
 
 export type ResearchRequestType = "screen" | "contract" | "chat";
@@ -32,7 +34,7 @@ type ResearchErrorCode = "CONFIG" | "BUDGET" | "TIMEOUT" | "RATE_LIMIT" | "QUOTA
   "PROVIDER" | "SCHEMA" | "NO_SOURCES" | "CANCELLED" | "REFUSAL";
 
 export class ResearchError extends Error {
-  constructor(readonly code: ResearchErrorCode, message: string) {
+  constructor(readonly code: ResearchErrorCode, message: string, readonly examinedSources?: EvidenceSource[]) {
     super(message);
     this.name = "ResearchError";
   }
@@ -173,7 +175,7 @@ export function researchErrorMessage(error: unknown) {
 function countSearches(response: Response) {
   // OpenAI's web-search guide identifies search actions as the billable calls.
   // The remaining actions still count against the Responses API max_tool_calls.
-  return response.output.filter((item) => item.type === "web_search_call" && item.action.type === "search").length;
+  return response.output.filter((item) => item.type === "web_search_call" && item.action?.type === "search").length;
 }
 
 function observedTokenCount(value: number | undefined) {
@@ -201,31 +203,79 @@ function completedText(response: Response) {
   return text;
 }
 
-function parseWebResearchJson(text: string): unknown {
+function parseWebResearchJson(text: string): unknown[] {
   try {
-    return JSON.parse(text);
+    const json: unknown = JSON.parse(text);
+    return Array.isArray(json) ? json : [json];
   } catch {
-    // Hosted search can surround the JSON with prose or citation markers.
-    const fenced = [...text.matchAll(/^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gim)];
-    if (fenced.length === 1) return JSON.parse(fenced[0][1]);
-    if (fenced.length > 1) throw new ResearchError("SCHEMA", "La réponse Web contient plusieurs blocs JSON. L’analyse ne peut pas en sélectionner un.");
-
+    // Look for complete objects in both fenced and plain research text.
     let start = 0;
     let depth = 0;
-    const objects: string[] = [];
+    const objects: unknown[] = [];
     for (const token of text.matchAll(/"(?:[^"\\]|\\[\s\S])*"|[{}]/g)) {
       if (token[0] === "{") {
         if (depth === 0) start = token.index;
         depth += 1;
       } else if (token[0] === "}" && depth > 0) {
         depth -= 1;
-        if (depth === 0) objects.push(text.slice(start, token.index + 1));
+        if (depth === 0) {
+          try {
+            objects.push(JSON.parse(text.slice(start, token.index + 1)));
+          } catch {
+            // A brace-delimited fragment may be prose rather than a JSON object.
+          }
+        }
       }
     }
-    if (objects.length > 1) throw new ResearchError("SCHEMA", "La réponse Web contient plusieurs objets JSON. L’analyse ne peut pas en sélectionner un.");
-    if (objects.length !== 1 || depth !== 0) throw new SyntaxError("Expected one complete JSON object");
-    return JSON.parse(objects[0]);
+    if (objects.length === 0 || depth !== 0) throw new SyntaxError("Expected complete JSON objects");
+    return objects;
   }
+}
+
+function matchesTicker(value: unknown, expectedTicker: string) {
+  return typeof value === "object" && value !== null && "ticker" in value &&
+    typeof value.ticker === "string" && value.ticker.trim().toUpperCase() === expectedTicker;
+}
+
+function includesAllFields(candidate: unknown, other: unknown) {
+  if (isDeepStrictEqual(candidate, other)) return true;
+  if (!candidate || !other || typeof candidate !== "object" || typeof other !== "object" ||
+    Array.isArray(candidate) || Array.isArray(other)) return false;
+
+  // A populated field may fill a gap in another object, but cannot override its content.
+  const fields = new Map(Object.entries(candidate));
+  return Object.entries(other).every(([key, value]) =>
+    value === null || (Array.isArray(value) && value.length === 0) || isDeepStrictEqual(value, fields.get(key)),
+  );
+}
+
+function validateResearchPayloads<Schema extends ZodType>(
+  payloads: unknown[],
+  schema: Schema,
+  expectedTicker: string | undefined,
+  response: Response,
+): output<Schema> {
+  // Reject the whole response at the limit so a later conflicting answer cannot be ignored.
+  if (payloads.length > 32) throw new ResearchError("SCHEMA", "La réponse Web contient trop d’objets pour valider l’analyse.");
+  const matches = expectedTicker ? payloads.filter((value) => matchesTicker(value, expectedTicker)) : payloads;
+  const parsed = matches.map((value) => schema.safeParse(value));
+  const valid = parsed.flatMap((value) => value.success ? [value.data] : []);
+  if (valid.length > 0) {
+    for (const candidate of valid) {
+      if (valid.every((other) => includesAllFields(candidate, other))) return candidate;
+    }
+    const sources = [...gatherSources(response, new Date()).values()];
+    throw new ResearchError("SCHEMA", "OpenAI a retourné des analyses différentes pour le même symbole. Aucune thèse n’a été retenue.", sources);
+  }
+  if (matches.length === 0 && expectedTicker) {
+    throw new ResearchError("SCHEMA", "Aucun résultat de recherche ne correspond au symbole demandé.");
+  }
+
+  const fields = [...new Set(parsed.flatMap((value) =>
+    value.success ? [] : value.error.issues.flatMap(({ path }) => typeof path[0] === "string" ? [path[0]] : []),
+  ))].slice(0, 4);
+  const detail = fields.length ? ` Champs à vérifier : ${fields.join(", ")}.` : "";
+  throw new ResearchError("SCHEMA", "La réponse OpenAI ne respecte pas le format de recherche." + detail);
 }
 
 interface RequestInput<Schema extends ZodType> {
@@ -234,6 +284,7 @@ interface RequestInput<Schema extends ZodType> {
   input: string;
   schema: Schema;
   schemaName: string;
+  expectedTicker?: string;
   deep?: boolean;
   web: boolean;
   maxOutputTokens: number;
@@ -349,18 +400,17 @@ export async function openAIRequest<Schema extends ZodType>(
   if (!response || !Array.isArray(response.output)) throw new ResearchError("SCHEMA", "OpenAI a retourné une réponse incomplète.");
   const text = completedText(response);
   if (input.web && !response.output.some((item) =>
-    item.type === "web_search_call" && item.action.type === "search" && item.status === "completed",
+    item.type === "web_search_call" && item.action?.type === "search" && item.status === "completed",
   )) {
     throw new ResearchError("NO_SOURCES", "La recherche Web n’a retourné aucune source exploitable.");
   }
 
   if (input.minimalWebProbe) return { data: input.schema.parse(text), response };
 
-  let json: unknown;
+  let payloads: unknown[];
   try {
-    json = input.web ? parseWebResearchJson(text) : JSON.parse(text);
-  } catch (error) {
-    if (error instanceof ResearchError) throw error;
+    payloads = input.web ? parseWebResearchJson(text) : [JSON.parse(text)];
+  } catch {
     if (!input.web) throw new ResearchError("SCHEMA", "OpenAI a retourné une réponse illisible.");
     const sources = gatherSources(response, new Date());
     if (sources.size === 0) {
@@ -389,15 +439,7 @@ export async function openAIRequest<Schema extends ZodType>(
       throw repairError;
     }
   }
-  const parsed = input.schema.safeParse(json);
-  if (!parsed.success) {
-    const fields = [...new Set(parsed.error.issues.flatMap(({ path }) =>
-      typeof path[0] === "string" ? [path[0]] : [],
-    ))].slice(0, 4);
-    const detail = fields.length ? ` Champs à vérifier : ${fields.join(", ")}.` : "";
-    throw new ResearchError("SCHEMA", "La réponse OpenAI ne respecte pas le format de recherche." + detail);
-  }
-  return { data: parsed.data, response };
+  return { data: validateResearchPayloads(payloads, input.schema, input.expectedTicker, response), response };
 }
 
 

@@ -127,11 +127,11 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
     const deep = context.mode === "deep";
     const { data, response } = await openAIRequest({
       type: "screen", instructions: screenInstructions, schema: screenSchema, schemaName: "underlying_research",
+      expectedTicker: symbol,
       input: JSON.stringify({ symbol, asOf: context.now.toISOString(), depth: deep ? "approfondie" : "rapide", prioritizeDomains: trustedResearchDomains }),
       deep, web: true, maxOutputTokens: deep ? 2800 : 1800, maxRequests: context.maxRequests,
       signal: context.signal, hooks: context.hooks, usages: context.usages,
     });
-    if (data.ticker.toUpperCase() !== symbol) throw new ResearchError("SCHEMA", "Le symbole retourné ne correspond pas au symbole demandé.");
     const retrieved = new Date();
     const examinedSources = gatherSources(response, retrieved);
     if (examinedSources.size === 0) throw new ResearchError("NO_SOURCES", "Aucune source Web de référence n’a été retracée pour ce symbole.");
@@ -201,6 +201,7 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
   async discover(symbol: string, preferences: RiskPreferences, context: ResearchContext) {
     const { data, response } = await openAIRequest({
       type: "contract", instructions: discoverInstructions, schema: discoverySchema, schemaName: "option_discovery",
+      expectedTicker: symbol,
       input: JSON.stringify({
         symbol, asOf: context.now.toISOString(), minDte: preferences.minDte ?? defaultRiskPreferences.minDte,
         maxDte: preferences.maxDte ?? defaultRiskPreferences.maxDte, prioritizeDomains: trustedResearchDomains,
@@ -208,7 +209,6 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
       deep: context.mode === "deep", web: true, maxOutputTokens: 2200, maxRequests: context.maxRequests,
       signal: context.signal, hooks: context.hooks, usages: context.usages,
     });
-    if (data.ticker.toUpperCase() !== symbol) throw new ResearchError("SCHEMA", "Le symbole retourné par la recherche d’options est incorrect.");
     const retrieved = new Date();
     const sources = gatherSources(response, retrieved);
     const evidence: ResearchEvidence[] = [];
@@ -292,13 +292,14 @@ export async function researchAsset(input: AssetResearchInput): Promise<AssetRes
       rejections.push(...result.rejections);
     } catch (error) {
       degraded = researchErrorMessage(error);
+      if (error instanceof ResearchError && error.examinedSources) examinedSources = error.examinedSources;
       rejections.push(degraded);
     }
   }
 
   const manualQuotes = await manual.getOptionsChain(symbol);
   if (!candidate && manualQuotes.length === 0) {
-    return { ...base, status: "failed", rejections, error: degraded, ...usageTotals(usages) };
+    return { ...base, status: "failed", rejections, error: degraded, examinedSources, ...usageTotals(usages) };
   }
   if (!candidate) {
     candidate = {
@@ -319,6 +320,9 @@ export async function researchAsset(input: AssetResearchInput): Promise<AssetRes
       examinedSources = mergeSources([...examinedSources, ...discovery.examinedSources]);
       rejections.push(discovery.reason);
     } catch (error) {
+      if (error instanceof ResearchError && error.examinedSources) {
+        examinedSources = mergeSources([...examinedSources, ...error.examinedSources]);
+      }
       rejections.push(`Vérification des contrats · ${researchErrorMessage(error)}`);
     }
   } else if (!manualQuotes.length && input.mode === "quick") {

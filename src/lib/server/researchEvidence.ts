@@ -78,7 +78,7 @@ const optionalClaimSchema = claimSchema.nullable().catch(null);
 const optionalClaimsSchema = z.array(optionalClaimSchema).default([]).catch([]);
 
 export const screenSchema = z.object({
-  ticker: z.string(),
+  ticker: z.string().trim().toUpperCase(),
   companyName: z.string(),
   direction: z.enum(["bullish", "bearish", "neutral", "mixed", "insufficient"]),
   thesis: optionalClaimSchema.default(null),
@@ -100,7 +100,7 @@ export const screenSchema = z.object({
 });
 
 export const discoverySchema = z.object({
-  ticker: z.string(),
+  ticker: z.string().trim().toUpperCase(),
   contracts: z.array(z.object({
     identifier: z.string(),
     type: z.enum(["call", "put"]),
@@ -143,9 +143,9 @@ export function gatherSources(response: Response, retrieval: Date) {
   for (const item of response.output) {
     if (item.type === "web_search_call" && item.status === "completed") {
       const action = item.action;
-      if (action.type === "search") {
+      if (action?.type === "search") {
         for (const result of action.sources ?? []) add(result.url);
-      } else if (action.url) add(action.url);
+      } else if (action?.url) add(action.url);
     }
     if (item.type !== "message" || item.phase === "commentary" || item.status !== "completed") continue;
     for (const block of item.content) {
