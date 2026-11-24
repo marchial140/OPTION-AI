@@ -73,18 +73,22 @@ const claimSchema = z.object({
   source: sourceReferenceSchema,
 });
 
+// A malformed qualitative observation carries no evidence and can be dropped on its own.
+const optionalClaimSchema = claimSchema.nullable().catch(null);
+const optionalClaimsSchema = z.array(optionalClaimSchema).default([]).catch([]);
+
 export const screenSchema = z.object({
   ticker: z.string(),
   companyName: z.string(),
   direction: z.enum(["bullish", "bearish", "neutral", "mixed", "insufficient"]),
-  thesis: claimSchema.nullable().default(null),
-  bullishFactors: z.array(claimSchema).default([]),
-  bearishFactors: z.array(claimSchema).default([]),
-  eventRisks: z.array(claimSchema).default([]),
-  sectorRisks: z.array(claimSchema).default([]),
-  volatilityContext: claimSchema.nullable().default(null),
-  news: z.array(claimSchema).default([]),
-  uncertainty: z.array(z.string()).default([]),
+  thesis: optionalClaimSchema.default(null),
+  bullishFactors: optionalClaimsSchema,
+  bearishFactors: optionalClaimsSchema,
+  eventRisks: optionalClaimsSchema,
+  sectorRisks: optionalClaimsSchema,
+  volatilityContext: optionalClaimSchema.default(null),
+  news: optionalClaimsSchema,
+  uncertainty: z.array(z.string()).default([]).catch([]),
   // An unusable event report must not discard independently sourced research.
   earnings: z.object({ date: z.iso.date(), source: sourceReferenceSchema }).nullable().default(null).catch(null),
   underlyingQuote: z.object({

@@ -91,6 +91,44 @@ describe("web research", () => {
   });
 
   it.each([
+    { label: "plain text", volatilityContext: "La volatilité est élevée selon le modèle." },
+    { label: "an unsourced object", volatilityContext: { text: "La volatilité est élevée selon le modèle.", source: null } },
+  ])("keeps valid screening evidence when volatility is returned as $label", async ({ volatilityContext }) => {
+    const bullishFactor = defaultScreen.bullishFactors[0];
+    createResponse.mockResolvedValueOnce(response({
+      ...defaultScreen,
+      volatilityContext,
+      bullishFactors: ["Facteur sans source", bullishFactor, { text: "Autre facteur non attribuable", source: null }],
+      sectorRisks: "Risque sectoriel non structuré",
+    }));
+
+    const result = await researchAsset(scan);
+
+    expect(result).toMatchObject({
+      status: "completed", requestCount: 1, opportunities: [],
+      candidate: { direction: "bullish", price: null, bullishFactors: [bullishFactor.text] },
+    });
+    expect(result.candidate?.evidence?.map(({ kind }) => kind)).not.toContain("volatility");
+    expect(JSON.stringify(result)).not.toContain("La volatilité est élevée selon le modèle.");
+  });
+
+  it("retains qualitative volatility context only when its source is traced", async () => {
+    const context = claim("Les nouvelles du secteur soutiennent un contexte volatil.");
+    createResponse.mockResolvedValueOnce(response({ ...defaultScreen, volatilityContext: context }));
+    createResponse.mockResolvedValueOnce(response({
+      ...defaultScreen, volatilityContext: claim(context.text, "https://www.sec.gov/uncited.htm"),
+    }));
+
+    const cited = await researchAsset(scan);
+    const uncited = await researchAsset(scan);
+
+    expect(cited.candidate?.evidence).toContainEqual(expect.objectContaining({
+      kind: "volatility", text: context.text, source: expect.objectContaining({ url: secUrl }),
+    }));
+    expect(uncited.candidate?.evidence?.map(({ kind }) => kind)).not.toContain("volatility");
+  });
+
+  it.each([
     { label: "a null date", earnings: { date: null, source: { url: secUrl } }, reported: false },
     { label: "an invalid calendar date", earnings: { date: "2026-11-31", source: { url: secUrl } }, reported: false },
     { label: "a missing source", earnings: { date: "2027-01-20" }, reported: false },

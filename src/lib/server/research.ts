@@ -137,21 +137,21 @@ class OpenAIWebResearchProvider implements MarketDataProvider {
     if (examinedSources.size === 0) throw new ResearchError("NO_SOURCES", "Aucune source Web de référence n’a été retracée pour ce symbole.");
 
     const evidence: ResearchEvidence[] = [];
-    function select(claims: Claim[], kind: ResearchEvidence["kind"]) {
+    function select(claims: (Claim | null)[], kind: ResearchEvidence["kind"]) {
       const accepted = claims.slice(0, 6).flatMap((claim) => {
-        const observation = boundClaim(claim, examinedSources);
+        const observation = claim && boundClaim(claim, examinedSources);
         return observation ? [{ kind, ...observation }] : [];
       });
       evidence.push(...accepted);
       return [...new Set(accepted.map(({ text }) => text))];
     }
 
-    const [thesis] = select(data.thesis ? [data.thesis] : [], "thesis");
+    const [thesis] = select([data.thesis], "thesis");
     const bullishFactors = select(data.bullishFactors, "bullish");
     const bearishFactors = select(data.bearishFactors, "bearish");
     const risks = [...select(data.eventRisks, "risk"), ...select(data.sectorRisks, "risk")];
     const news = select(data.news, "news");
-    if (data.volatilityContext) select([data.volatilityContext], "volatility");
+    select([data.volatilityContext], "volatility");
 
     const domains = new Set(evidence.map(({ source }) => source.publisher));
     const directionBacked = Boolean(thesis) &&
