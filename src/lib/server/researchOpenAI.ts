@@ -122,7 +122,7 @@ function classifyProviderError(error: unknown, signal?: AbortSignal) {
     };
   }
   const data = typeof error === "object" && error !== null
-    ? error as { status?: number; name?: string; code?: string; param?: string; headers?: Headers }
+    ? error as { status?: number; name?: string; code?: string; param?: string; message?: string; headers?: Headers }
     : {};
   if (data.status === 429) {
     if (data.code === "insufficient_quota" || data.code === "billing_hard_limit_reached") {
@@ -161,7 +161,14 @@ function classifyProviderError(error: unknown, signal?: AbortSignal) {
       data.param && safeParameters.includes(data.param) ? data.param : undefined,
     ].filter(Boolean);
     const diagnostic = data.status === 400 && details.length ? " (" + details.join(" · ") + ")" : "";
-    return { error: new ResearchError("CONFIG", configMessage + diagnostic), retry: false, uncertain: false };
+    const message = typeof data.message === "string" ? data.message.slice(0, 2_000) : "";
+    const isFormatParameter = typeof data.param === "string" && data.param.startsWith("text.format.");
+    const rejectsStructuredWeb = data.status === 400 && (
+      data.param === "tools" || data.param === "tools[0].type" ||
+      data.param === "text" || data.param === "text.format" || isFormatParameter ||
+      (/\b(?:json_schema|text\.format|structured outputs?)\b/i.test(message) && /\b(?:web_search|web search)\b/i.test(message))
+    );
+    return { error: new ResearchError("CONFIG", configMessage + diagnostic), retry: false, uncertain: false, rejectsStructuredWeb };
   }
   const serverError = data.status !== undefined && data.status >= 500;
   return {
@@ -310,6 +317,7 @@ interface RequestInput<Schema extends ZodType> {
   maxRequests: number;
   maxWebCalls?: number;
   minimalWebProbe?: boolean;
+  promptOnlyWeb?: boolean;
   hooks?: BudgetHooks;
   signal?: AbortSignal;
   usages: ResearchUsage[];
@@ -333,13 +341,19 @@ export async function openAIRequest<Schema extends ZodType>(
   const retryMax = envInteger("AI_MAX_RETRIES", 1, 0, 2);
   const maxToolCalls = input.web ? (input.maxWebCalls ?? (input.deep ? 4 : 2)) : 0;
   const format = input.minimalWebProbe ? undefined : zodTextFormat(input.schema, input.schemaName);
-  // Some models reject hosted search combined with a strict response format.
-  const instructions = input.web && !input.minimalWebProbe
+  const structuredFormat = format && !(input.web && input.promptOnlyWeb) ? {
+    ...format,
+    // Defaults belong to local validation and are unsupported in strict provider schemas.
+    schema: JSON.parse(JSON.stringify(format.schema, (key, value: unknown) =>
+      key === "default" ? undefined : value)),
+  } : undefined;
+  const instructions = input.web && input.promptOnlyWeb
     ? input.instructions + "\nReturn only one JSON object matching this schema. Use null for unavailable nullable fields and [] for empty lists. Put source URLs in their designated fields. Do not add Markdown or citation markers to JSON syntax. Schema: " + JSON.stringify(format?.schema)
     : input.instructions;
   // Reserve conservatively for search context and reconcile with actual usage.
   const estimatedWebContextTokens = input.web ? (input.deep ? 20_000 : 10_000) : 0;
-  const reservedTokens = Buffer.byteLength(instructions + input.input, "utf8") +
+  const formatBytes = structuredFormat ? Buffer.byteLength(JSON.stringify(structuredFormat), "utf8") : 0;
+  const reservedTokens = Buffer.byteLength(instructions + input.input, "utf8") + formatBytes +
     estimatedWebContextTokens * maxToolCalls + 2_000;
   const reservation = {
     model: model.name,
@@ -366,14 +380,7 @@ export async function openAIRequest<Schema extends ZodType>(
         input: input.input,
         store: false,
         max_output_tokens: input.maxOutputTokens,
-        ...(!input.web && format ? {
-          text: { format: {
-            ...format,
-            // Defaults belong to local validation and are unsupported in strict provider schemas.
-            schema: JSON.parse(JSON.stringify(format.schema, (key, value: unknown) =>
-              key === "default" ? undefined : value)),
-          } },
-        } : {}),
+        ...(structuredFormat ? { text: { format: structuredFormat } } : {}),
         ...(input.web ? {
           tools: [{ type: "web_search" }],
           tool_choice: "required" as const,
@@ -411,6 +418,9 @@ export async function openAIRequest<Schema extends ZodType>(
     input.usages.push(usage);
     await input.hooks?.recordUsage?.(usage);
     if (!failure) break;
+    if (input.web && structuredFormat && failure.rejectsStructuredWeb && input.usages.length < input.maxRequests) {
+      return openAIRequest({ ...input, promptOnlyWeb: true });
+    }
     if (!failure.retry || retry === retryMax || input.usages.length >= input.maxRequests) throw failure.error;
     const waitMs = Math.max(200 * 2 ** retry, failure.waitMs ?? 0);
     await new Promise((resolve) => setTimeout(resolve, waitMs));

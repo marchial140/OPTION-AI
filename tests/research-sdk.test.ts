@@ -77,11 +77,63 @@ describe("official SDK request and response contract", () => {
       store: false,
       tool_choice: "required",
       max_tool_calls: 2,
-      instructions: expect.stringContaining('"underlyingQuote"'),
+      text: { format: { type: "json_schema", name: "underlying_research", strict: true } },
     });
     expect(body.tools).toEqual([{ type: "web_search" }]);
     expect(body.include).toEqual(["web_search_call.action.sources"]);
-    expect(body).not.toHaveProperty("text");
+    expect(body.text.format.schema.properties).toHaveProperty("underlyingQuote");
+    expect(body.text.format.schema.properties.bullishFactors).not.toHaveProperty("default");
+    expect(body.instructions).not.toContain('"underlyingQuote"');
+  });
+
+  it.each([
+    { label: "the search tool", param: "tools", message: "Private provider error" },
+    { label: "the schema", param: "text.format.schema", message: "Private provider error" },
+    { label: "the combination", param: null, message: "json_schema is not supported with web_search" },
+  ])("falls back once when the API rejects $label", async ({ param, message: providerMessage }) => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(json({
+        error: { code: "invalid_request_error", param, message: providerMessage },
+      }, 400))
+      .mockResolvedValueOnce(json({
+        status: "completed",
+        usage: { input_tokens: 100, output_tokens: 30 },
+        output: [
+          { type: "web_search_call", status: "completed", action: { type: "search", sources: [{ type: "url", url: secUrl }] } },
+          message("final_answer", [text(JSON.stringify(analysis))]),
+        ],
+      }));
+    vi.stubGlobal("fetch", fetch);
+    const allowRequest = vi.fn(async () => true);
+
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests: 2, allowRequest });
+
+    expect(result).toMatchObject({ status: "completed", requestCount: 2, estimatedCost: 0.01016, candidate: { price: null } });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(allowRequest).toHaveBeenCalledTimes(2);
+    const initial = JSON.parse(String(fetch.mock.calls[0][1]?.body));
+    const compatibility = JSON.parse(String(fetch.mock.calls[1][1]?.body));
+    expect(initial.text.format.strict).toBe(true);
+    expect(compatibility).not.toHaveProperty("text");
+    expect(compatibility).toMatchObject({
+      tools: [{ type: "web_search" }], include: ["web_search_call.action.sources"],
+      instructions: expect.stringContaining("Return only one JSON object"),
+    });
+  });
+
+  it.each([
+    { param: "tools", maxRequests: 1 },
+    { param: "model", maxRequests: 2 },
+  ])("makes no compatibility request for $param with a cap of $maxRequests", async ({ param, maxRequests }) => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(json({
+      error: { code: "invalid_request_error", param },
+    }, 400));
+    vi.stubGlobal("fetch", fetch);
+
+    const result = await researchAsset({ symbol: "NVDA", mode: "quick", dataMode: "live", maxRequests });
+
+    expect(result).toMatchObject({ status: "failed", requestCount: 1, estimatedCost: 0 });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it.each([
