@@ -5,7 +5,7 @@ import { assessRisk, type RiskPreferences } from '@/lib/quant';
 import type { Identity } from './auth';
 import { currentLegSources } from './observations';
 import { portfolioExposure } from './paper';
-import { marketSession, researchAsset, researchHealth } from './research';
+import { marketDataAvailableFor, marketSession, researchAsset, researchHealth } from './research';
 import { mutateWorkspace, readWorkspace } from './store';
 
 export class JobError extends Error {
@@ -61,8 +61,8 @@ export function queueScan(state: WorkspaceState, identity: Identity, data: {
     return existing;
   }
   if (state.scans.some(activeScan)) throw new JobError('Une analyse est déjà en cours.', 409, 'scan_active');
-  if (identity.mode === 'live' && !researchHealth().configured && !state.manualQuotes.length) {
-    throw new JobError('Configurez OpenAI et les hypothèses tarifaires, ou saisissez des cotations courtier.', 503, 'research_unconfigured');
+  if (identity.mode === 'live' && !marketDataAvailableFor(identity.email) && !researchHealth().configured && !state.manualQuotes.length) {
+    throw new JobError('Configurez Market Data pour les cotations automatiques, ou une source de recherche dans les réglages.', 503, 'research_unconfigured');
   }
   const list = data.watchlistId ? state.watchlists.find((watchlist) => watchlist.id === data.watchlistId) : state.watchlists[0];
   if (data.watchlistId && !list) throw new JobError('Liste de suivi introuvable.', 404, 'not_found');
@@ -271,7 +271,7 @@ export async function advanceScan(identity: Identity, scanId: string, signal?: A
   let result: Awaited<ReturnType<typeof researchAsset>>;
   try {
     result = await researchAsset({
-      symbol:claim.symbol,mode:claim.scan.type,dataMode:identity.mode,
+      symbol:claim.symbol,mode:claim.scan.type,dataMode:identity.mode,ownerEmail:identity.email,
       preferences:riskPreferences(claim.settings),manualQuotes:claim.manualQuotes,
       cachedResult:claim.cachedResult,signal,
       construction:{existingRisk:claim.exposure,openPositions:claim.openPositions, quantity:1,fees:1.30,weights:claim.settings.scoreWeights},

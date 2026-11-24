@@ -345,6 +345,18 @@ export function SettingsPage({ state, refresh }: { state: AppState; refresh: Ref
           {state.research.model && <p>Modèle configuré · {state.research.model}</p>}
           <p>Dernier scan abouti · {timestamp(latest?.completedAt)}</p>
         </div>
+        {state.mode === "live" && <div className="wp-card-row">
+          <div className="wp-split">
+            <strong>Market Data · chaînes d’options</strong>
+            <Status value={state.research.marketDataConfigured ? "configured" : "setup"} dictionary={{
+              configured: "Configuré côté serveur", setup: "Configuration requise",
+            }} />
+          </div>
+          <p>{state.research.marketDataConfigured
+            ? "L’accès aux données dépend des droits du forfait et se confirme lors d’un scan."
+            : "Configurez ce fournisseur facultatif côté serveur pour récupérer des chaînes d’options lors des scans."}</p>
+          <p>Les cotations en cache sont horodatées et servent à l’analyse indicative.</p>
+        </div>}
         <OpenAIConnection refresh={refresh} />
         {errors.map((scan) => <details key={scan.id} className="wp-card-row"><summary>Diagnostic du scan du {timestamp(scan.startedAt)}</summary>
           <p>{scan.error ?? `Actifs en échec · ${scan.failed.join(", ")}`}</p>

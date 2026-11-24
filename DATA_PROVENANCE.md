@@ -7,6 +7,7 @@ The workspace distinguishes an underlying research candidate from an option stra
 | Class | What it supports |
 | --- | --- |
 | Web research | Attributed news, directional evidence, event context, and explicitly sourced observations where supported |
+| Market Data cached chain | Timestamped bid, ask, and identity for eligible US option contracts, with additional liquidity fields where supplied |
 | Attested broker quote | User-submitted contract observation with an explicit broker source, quote timestamp, and attestation |
 | Manual simulator input | User-entered premiums for calculation and paper tracking |
 | Demo | Synthetic observations, contracts, and paper fills for exploring workflows |
@@ -30,6 +31,8 @@ Quote time describes the observation. Retrieval time records when research obtai
 Contract validation checks the standard OCC identity, USD denomination, verified multiplier of 100, expiry, bid/ask ordering, and consistent observation and retrieval times. It treats observations older than 15 minutes as delayed and those older than 36 hours as stale. Conflicting bid and ask records for the same contract and observation time are rejected. Multi-leg opportunities require observations within five minutes of one another and compatible provenance. See [Risk engine](RISK_ENGINE.md).
 
 Attested broker observations must refer to the regular session or its closing time. Their source method is `manual-broker` and confidence is `user-attested`. These observations remain indicative and enter the strategy pipeline under `MANUAL_ATTESTED` after structural checks. Older records tagged as delayed but identified as `manual-broker` are displayed as manual attestations. The current view excludes withdrawn, superseded, expired, and stale observations. Historical scans retain their recorded source and quote time.
+
+Market Data quotes retain the provider as their source and the contract record's `updated` timestamp as the quote time. The scanner verifies US listing in the Nasdaq Trader symbol directories and requests standard option series. It accepts only snapshots from the regular US session or its exact close, at most 30 minutes old when evaluated. It rejects quotes timestamped in the future. A valid cached quote is displayed as `VERIFIED_DELAYED` and supports indicative strategy calculations. The scanner applies the configured expiration, liquidity, capital, and risk restrictions before ranking. A cache miss, stale observation, or invalid contract can leave a scan with zero qualifying strategies. See [Nasdaq Trader symbol directories](https://www.nasdaqtrader.com/Trader.aspx?id=SymbolDirDefs), [Market Data option chain fields](https://www.marketdata.app/docs/api/options/chain/), and [OCC Equity Options](https://www.theocc.com/clearance-and-settlement/clearing/equity-options-product-specifications).
 
 A validation status describes support and timing for a specific research use. For web and historical observations, the ability to transact at a reported price remains unknown. The equity options session indicator follows regular hours. Individual products and venues can use different hours.
 

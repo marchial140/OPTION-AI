@@ -184,6 +184,7 @@ const dateInNewYork = new Intl.DateTimeFormat('en-CA', {
 const dayMs = 86_400_000;
 const minuteMs = 60_000;
 const maximumLegTimeGap = 5 * minuteMs;
+export const marketDataQuoteMaxAgeMs = 30 * minuteMs;
 
 export function daysToExpiration(expiration: string, now = new Date()): number {
   if (!Number.isFinite(now.getTime())) return Number.NaN;
@@ -262,6 +263,10 @@ export function validateQuote(quote: ContractQuote, expectedSymbol = quote.symbo
   if (quote.status === 'DEMO') return { valid: true, status: 'DEMO' };
   if (!qualified && !userAttested) {
     return { valid: false, status: quote.status, reason: 'La provenance ou la fraîcheur de la cotation ne permet pas son classement.' };
+  }
+  if (quote.source.method === 'marketdata-cached') {
+    if (age > marketDataQuoteMaxAgeMs) return { valid: false, status: 'STALE', reason: 'La cotation Market Data a plus de 30 minutes.' };
+    return { valid: true, status: 'VERIFIED_DELAYED' };
   }
   if (age > 36 * 60 * minuteMs) return { valid: false, status: 'STALE', reason: 'La cotation a plus de 36 heures.' };
   if (userAttested) return { valid: true, status: 'MANUAL_ATTESTED' };

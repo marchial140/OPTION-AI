@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Clock3, Download, History, LoaderCircle, Radio, ScanLine, Trash2 } from "lucide-react";
 import { strategyLabels } from "@/lib/quant";
 import type { AppState, Scan, ScanType, Settings } from "@/lib/workspace";
-import { actionForm, dataLabels, dayInput, directionLabels, downloadJson, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, scanLabels, SourceLink, Stat, Status, Submit, timestamp, usePreparedRequest } from "./ui";
+import { dataLabels, dayInput, directionLabels, downloadJson, Empty, errorMessage, Field, Heading, money, Notice, Panel, request, scanLabels, SourceLink, Stat, Status, Submit, timestamp, usePreparedRequest } from "./ui";
 
 const stageNames: Record<string, string> = {
   queued: "En file d’attente", research: "Recherche du sous-jacent", screening: "Sélection des candidats",
@@ -71,8 +71,8 @@ function ScanReport({ scan, showExport = false }: { scan: Scan; showExport?: boo
       <Stat label="Actifs en échec" value={scan.failed.length} />
       <Stat label="Candidats" value={scan.candidates.length} />
       <Stat label="Stratégies admissibles" value={scan.opportunities.length} />
-      <Stat label="Requêtes" value={scan.requestCount} />
-      <Stat label="Coût estimé" value={money(scan.estimatedCost)} />
+      <Stat label="Requêtes OpenAI" value={scan.requestCount} />
+      <Stat label="Coût OpenAI estimé" value={money(scan.estimatedCost)} />
     </div>
     {scan.error && <Notice type="error">{scan.error}</Notice>}
     {(scan.status === "completed" || scan.status === "partial") && scan.opportunities.length === 0 && <Notice>Aucune opportunité ne respecte actuellement vos critères.</Notice>}
@@ -122,11 +122,13 @@ export function Scanner({ state, refresh, symbol, listId }: {
   const [error, setError] = useState("");
   const [hasChanged, setHasChanged] = useState(false);
   const prepared = usePreparedRequest<ScanRequest>();
+  const launching = useRef(false);
   const scan = selectedScan ?? state.scans[0];
   const tickers = tickersFrom(symbols);
   const running = Boolean(selectedScan && pendingScan(selectedScan));
   const scanId = selectedScan?.id;
-  const offline = state.mode === "live" && !state.research.configured && !state.manualQuotes.length;
+  const automated = state.mode === "live" && state.research.marketDataConfigured;
+  const offline = state.mode === "live" && !automated && !state.research.configured && !state.manualQuotes.length;
 
   useEffect(() => {
     if (!running || !scanId || pollPaused) return;
@@ -194,6 +196,7 @@ export function Scanner({ state, refresh, symbol, listId }: {
   };
 
   const launch = async () => {
+    if (running || offline || launching.current) return;
     setHasChanged(true);
     setError("");
     if (!tickers.length || tickers.length > 20) {
@@ -204,6 +207,7 @@ export function Scanner({ state, refresh, symbol, listId }: {
       setError("Vérifiez la plage d’échéances et sélectionnez au moins une stratégie.");
       return;
     }
+    launching.current = true;
     setPending(true);
     try {
       const overrides: Partial<Settings> | undefined = type === "custom" ? {
@@ -219,6 +223,7 @@ export function Scanner({ state, refresh, symbol, listId }: {
     } catch (failure) {
       setError(errorMessage(failure));
     } finally {
+      launching.current = false;
       setPending(false);
     }
   };
@@ -228,12 +233,15 @@ export function Scanner({ state, refresh, symbol, listId }: {
       actions={<Link className="wp-button" href="/history"><History size={16} /> Historique</Link>} />
     <div className="wp-grid">
       <Panel title="Configurer un scan" detail="Le scanner enregistre ses résultats et les motifs de rejet.">
-        <form className="wp-form" onSubmit={actionForm(() => void launch())}>
+        <form className="wp-form" onSubmit={(event) => {
+          event.preventDefault();
+          void launch();
+        }}>
           <fieldset className="wp-segment">
             <legend className="wp-micro">Mode de recherche</legend>
             {scanModes.map((mode) => <label key={mode}><input type="radio" name="mode" value={mode} checked={type === mode} onChange={() => setType(mode)} /> {scanLabels[mode]}</label>)}
           </fieldset>
-          <p className="wp-micro">{type === "deep" ? "Recherche élargie et davantage de vérifications par sous-jacent." : type === "custom" ? "Resserrez les limites de risque ou d’échéance pour ce scan." : "Repérage ciblé avec réutilisation des recherches récentes lorsque possible."}</p>
+          <p className="wp-micro">{type === "deep" ? "Recherche élargie et davantage de vérifications par sous-jacent." : type === "custom" ? "Resserrez les limites de risque ou d’échéance pour ce scan." : automated ? "Récupère les cotations indicatives et applique vos critères, sans appel OpenAI." : "Repérage ciblé avec réutilisation des recherches récentes lorsque possible."}</p>
           <Field label="Liste de suivi"><select value={selectedList} onChange={(event) => {
             setSelectedList(event.target.value);
             const list = state.watchlists.find((item) => item.id === event.target.value);
@@ -253,7 +261,7 @@ export function Scanner({ state, refresh, symbol, listId }: {
             </fieldset>
           </div>}
           {state.mode === "demo" && <Notice>Démo · Le scanner utilise des données fictives et aucun appel de recherche facturable.</Notice>}
-          {offline && <Notice type="error">La connexion OpenAI Web Search manque dans la configuration du serveur.</Notice>}
+          {offline && <Notice type="error">Configurez une source de recherche ou de cotations dans les réglages.</Notice>}
           {error && <Notice type="error">{error}</Notice>}
           <div className="wp-actions">
             <Submit pending={pending} disabled={running || offline}><ScanLine size={16} /> Scanner le marché</Submit>

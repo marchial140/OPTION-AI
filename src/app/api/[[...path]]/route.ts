@@ -12,7 +12,7 @@ import {
 import { listScheduledIdentities, mutateWorkspace, readWorkspace, StorageError } from '@/lib/server/store';
 import { advanceScan, activeScan, budgetHooks, JobError, notify, queueScan, reconcileExpiredReservations, riskPreferences, scanSettings, scheduledWork, usageTotals } from '@/lib/server/jobs';
 import { exitPaperTrade, openPaperTrade, PaperError, portfolioExposure } from '@/lib/server/paper';
-import { chatResearch, marketSession, researchHealth } from '@/lib/server/research';
+import { chatResearch, marketDataAvailableFor, marketSession, researchHealth } from '@/lib/server/research';
 import { currentLegSources, sameContract, sameObservation } from '@/lib/server/observations';
 import { validateManualQuote } from '@/lib/server/researchProviders';
 import { authInput, chatInput, exitTradeInput, openTradeInput, scanInput, settingsInput, symbolInput, watchlistInput, watchlistItemInput, watchlistsInput } from '@/lib/server/inputs';
@@ -137,7 +137,9 @@ function stateFor(identity: Identity, state: WorkspaceState): AppState {
   const health = researchHealth();
   return {
     mode:identity.mode,user:{email:identity.email},market:marketSession(now),
-    research:{...health,model:health.model ?? undefined,demoAvailable:demoAvailable(),schedulerConfigured:Boolean(process.env.CRON_SECRET && process.env.CRON_SECRET.length >= 24)},
+    research:{...health,model:health.model ?? undefined,demoAvailable:demoAvailable(),
+      schedulerConfigured:Boolean(process.env.CRON_SECRET && process.env.CRON_SECRET.length >= 24),
+      marketDataConfigured:identity.mode === 'live' && marketDataAvailableFor(identity.email)},
     settings:state.settings,watchlists:state.watchlists,scans:state.scans.map(safeScan),portfolio:state.portfolio,
     notifications:state.notifications,manualQuotes:state.manualQuotes.map(normalizeObservation),candidates,opportunities,
     savedOpportunityIds:state.savedOpportunityIds ?? [],

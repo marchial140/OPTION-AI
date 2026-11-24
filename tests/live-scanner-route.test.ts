@@ -80,6 +80,8 @@ it('persists authenticated scanner results, sources and usage through success, r
     OPENAI_WEBHOOK_SECRET: '',
     OPENAI_CUSTOM_HEADERS: '',
     OPENAI_LOG: 'off',
+    MARKETDATA_API_TOKEN: '',
+    MARKETDATA_OWNER_EMAIL: '',
     AI_INPUT_USD_PER_MILLION: '0.5',
     AI_OUTPUT_USD_PER_MILLION: '2',
     AI_SEARCH_USD_PER_CALL: '0.01',
@@ -94,6 +96,7 @@ it('persists authenticated scanner results, sources and usage through success, r
   let stored: { revision: number; value: WorkspaceState } | undefined;
   const unexpected: string[] = [];
   const providerCalls: unknown[] = [];
+  const marketDataCalls: string[] = [];
 
   // Intercept all network traffic. Keep the production SDK, routing,
   // authentication, storage CAS, scan orchestration and pricing code in use.
@@ -163,6 +166,31 @@ it('persists authenticated scanner results, sources and usage through success, r
       if (providerCalls.length === 4) return Response.json({
         error: { message: 'Private mock provider detail', type: 'rate_limit_error', code: 'rate_limit_exceeded' },
       }, { status: 429, headers: { 'Retry-After': '60' } });
+    }
+    if (url.origin === 'https://www.nasdaqtrader.com') {
+      if (url.pathname === '/dynamic/SymDir/nasdaqlisted.txt') return new Response([
+        'Symbol|Security Name|Market Category|Test Issue|Financial Status|Round Lot Size|ETF|NextShares',
+        'AMD|Advanced Micro Devices|Q|N|N|100|N|N',
+        'TSLA|Tesla|Q|N|N|100|N|N',
+        'File Creation Time: 0721202615:30|||||||',
+      ].join('\n'));
+      if (url.pathname === '/dynamic/SymDir/otherlisted.txt') return new Response([
+        'ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol',
+        'SPY|SPDR S&P 500 ETF Trust|P|SPY|Y|100|N|SPY',
+        'File Creation Time: 0721202615:30|||||||',
+      ].join('\n'));
+    }
+    if (url.origin === 'https://api.marketdata.app' && request.method === 'GET' && auth === 'Bearer fixture-market-data') {
+      const symbol = url.pathname.match(/^\/v1\/options\/chain\/(AMD|TSLA)\/$/)?.[1];
+      if (symbol && url.searchParams.get('mode') === 'cached' && url.searchParams.get('nonstandard') === 'false') {
+        marketDataCalls.push(symbol);
+        return Response.json({
+          s: 'ok', optionSymbol: [symbol + '260807C00175000'], underlying: [symbol], side: ['call'],
+          expiration: [Date.parse('2026-08-07T20:00:00Z') / 1000],
+          strike: [175], bid: [1.7], ask: [1.9], updated: [Date.parse(quoteAt) / 1000],
+          volume: [150], openInterest: [300],
+        }, { status: 203 });
+      }
     }
     unexpected.push(request.method + ' ' + url.origin + url.pathname);
     throw new Error('Unexpected outbound request in the offline scanner test.');
@@ -249,6 +277,46 @@ it('persists authenticated scanner results, sources and usage through success, r
   const { scan: failed } = await result<{ scan: Scan }>(await call('POST', `scans/${blocked.scan.id}/advance`, { cookie }));
   expect(failed).toMatchObject({ status: 'failed', failed: ['AMD'], candidates: [], opportunities: [], requestCount: 0 });
   expect(failed.rejections).toEqual(expect.arrayContaining([expect.objectContaining({ reason: expect.stringMatching(/budget/iu) })]));
+
+  vi.stubEnv('MARKETDATA_API_TOKEN', 'fixture-market-data');
+  vi.stubEnv('MARKETDATA_OWNER_EMAIL', 'another-owner@example.test');
+  vi.stubEnv('OPENAI_API_KEY', '');
+  const otherWorkspace = await result<AppState>(await call('GET', 'state', { cookie }));
+  expect(otherWorkspace.research.marketDataConfigured).toBe(false);
+  await result(await call('POST', 'scans', { cookie, data: { type: 'quick', tickers: ['AMD'] } }), 503);
+  expect(marketDataCalls).toEqual([]);
+
+  vi.stubEnv('MARKETDATA_OWNER_EMAIL', owner.email);
+  const automated = await result<AppState>(await call('GET', 'state', { cookie }));
+  expect(automated.research).toMatchObject({ configured: false, marketDataConfigured: true });
+  const autoInput = { cookie, data: { type: 'quick', tickers: ['AMD', 'TSLA'] }, key: 'automatic-options-scan' };
+  const { scan: autoQueued } = await result<{ scan: Scan }>(await call('POST', 'scans', autoInput), 202);
+  const duplicate = await result<{ scan: Scan }>(await call('POST', 'scans', autoInput), 202);
+  expect(duplicate.scan.id).toBe(autoQueued.id);
+  const autoPath = `scans/${autoQueued.id}/advance`;
+  await result(await call('POST', autoPath, { cookie }));
+  const { scan: autoFinished } = await result<{ scan: Scan }>(await call('POST', autoPath, { cookie }));
+  expect(autoFinished).toMatchObject({
+    status: 'completed', completed: ['AMD', 'TSLA'], failed: [], requestCount: 0, estimatedCost: 0,
+    opportunities: expect.arrayContaining(['AMD', 'TSLA'].map((symbol) => expect.objectContaining({
+      symbol, price: null, status: 'VERIFIED_DELAYED', score: null,
+      input: expect.objectContaining({
+        legs: [expect.objectContaining({ bid: 1.7, ask: 1.9, quoteAt, source: expect.objectContaining({ publisher: 'Market Data' }) })],
+      }),
+      result: expect.objectContaining({ maxLoss: 191.3 }),
+    }))),
+  });
+  expect(marketDataCalls).toEqual(['AMD', 'TSLA']);
+  const saved = await result<AppState>(await call('GET', 'state', { cookie }));
+  expect(saved.scans[0]).toEqual(autoFinished);
+  expect(saved.opportunities.map(({ symbol }) => symbol)).toEqual(expect.arrayContaining(['AMD', 'TSLA']));
+  expect(JSON.stringify(saved)).not.toContain('fixture-market-data');
+  const repeated = await result<{ scan: Scan }>(await call('POST', 'scans', { ...autoInput, key: 'repeat-options-scan' }), 202);
+  const repeatPath = `scans/${repeated.scan.id}/advance`;
+  await result(await call('POST', repeatPath, { cookie }));
+  const finalRepeat = await result<{ scan: Scan }>(await call('POST', repeatPath, { cookie }));
+  expect(finalRepeat.scan).toMatchObject({ status: 'completed', completed: ['AMD', 'TSLA'], requestCount: 0 });
+  expect(marketDataCalls).toEqual(['AMD', 'TSLA']);
   expect(providerCalls).toHaveLength(4);
   expect(unexpected).toEqual([]);
 });

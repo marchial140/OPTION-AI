@@ -26,6 +26,15 @@ function bearPut(): StrategyInput {
 }
 
 describe('payoff engine', () => {
+  it('keeps automatic cached quotes indicative and expires them after thirty minutes', () => {
+    const snapshot = quote('call', 100, 1.7, 1.9, {
+      source: { url: 'https://api.marketdata.app/v1/options/chain/SPY/', publisher: 'Market Data', method: 'marketdata-cached' },
+      status: 'VERIFIED_DELAYED',
+    });
+    expect(validateQuote(snapshot, 'SPY', now)).toEqual({ valid: true, status: 'VERIFIED_DELAYED' });
+    expect(validateQuote(snapshot, 'SPY', new Date('2026-06-01T15:25:01.000Z'))).toMatchObject({ valid: false, status: 'STALE' });
+  });
+
   it('reproduces the bull call debit spread example', () => {
     const input = bullCall();
     expect(calculateStrategy(input)).toMatchObject({ entryDebit: 180, maxLoss: 180, maxProfit: 320, breakEven: 101.8 });

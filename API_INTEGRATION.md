@@ -46,6 +46,24 @@ A scan request can supply symbols directly or select a saved watchlist. Supply a
 }
 ```
 
+## Optional Market Data option chains
+
+Set `MARKETDATA_API_TOKEN` on the server and `MARKETDATA_OWNER_EMAIL` to the email of the authenticated workspace owner. The feed is available to that owner in the live workspace. Keep the token in `.env.local` or your server secret manager.
+
+A Canadian resident researching US-listed options for personal use can check eligibility and select an account plan that includes cached US options chains. Market Data determines subscriber classification and data entitlements. Activate the plan yourself after reviewing its checkout price, currency, and terms. Free and trial plans lack cached-chain access. See [Market Data pricing](https://www.marketdata.app/pricing/), [account verification](https://www.marketdata.app/docs/account/data-policies/account-verification/), and [plan limits](https://www.marketdata.app/docs/account/plan-limits/).
+
+The server requests the US option chain with `mode=cached`, `maxage=30min`, the configured expiration range, and a 48-row limit. Market Data documents one credit for a qualifying cached response per underlying request. A `204` response indicates a cache miss and consumes zero credits under the documented policy. The integration stays in cached mode when the cache is empty. Availability and age depend on the provider's cache, plan, and market schedule. Provider credits are billed separately from OpenAI usage. See [Data mode and cache charging](https://www.marketdata.app/docs/api/universal-parameters/mode/), [universal parameters](https://www.marketdata.app/docs/api/universal-parameters/), and [option chain endpoint](https://www.marketdata.app/docs/api/options/chain/).
+
+The scanner accepts up to 20 supported US symbols per scan and passes at most 48 eligible quotes per symbol to the calculation and risk engine. A quick scan with the configured feed uses quote data without an OpenAI call. Deep and custom scans can add sourced Web context when OpenAI is configured. Only eligible contract combinations become indicative strategies. When the feed provides no eligible input quotes, the scanner can use saved broker-attested observations. Any independently sourced Web research remains available in the scan.
+
+A successful chain lookup or cache miss is reused for 30 seconds for the same credential, symbol, and expiration range. Concurrent identical requests share the same lookup. The authenticated owner check applies to interactive scans.
+
+A quote-only scan can calculate payoff and risk for indicative strategies. When directional evidence is unavailable, the score remains unavailable.
+
+Use a personal plan in a private, single-owner deployment where only the subscriber accesses the licensed data. Market Data terms place conditions on storage, redistribution through API or export, and deletion of downloaded values after a paid subscription ends. Shared or commercial use requires explicit licensing for the intended workflow. See [Market Data terms](https://www.marketdata.app/terms/) and [Market Data licensing guidance](https://www.marketdata.app/education/licensing/bring-your-own-key/).
+
+Run a personal token on one local machine or one persistent, owner-controlled instance with stable network egress. The provider restricts self-service plans to one active IP and excludes ordinary serverless functions. See [single-IP policy](https://www.marketdata.app/docs/account/data-policies/single-ip/) and [supported deployment guidance](https://www.marketdata.app/docs/api/troubleshooting/multiple-ip-addresses/).
+
 ## Responses API
 
 The server uses the official JavaScript SDK and a configured model. Research requests ask for structured output via `text.format` alongside the built-in `web_search` tool and a bounded tool-call budget. If OpenAI rejects the tool or format combination before search, the scanner can fall back once to the documented Web search request with a schema in the prompt, subject to the same request and spend limits. The connection probe keeps its minimal Web search request. Responses pass strict runtime validation before the application can save them. The evidence parser accepts sources whose HTTPS URLs and source category are corroborated by OpenAI search output or citation annotations. Financial quote assertions require evidence independent of model text.
@@ -68,4 +86,4 @@ Usage-based estimates use input tokens, output tokens, and search calls observed
 
 ### Market session and data coverage
 
-Market status uses `America/New_York` and an exchange holiday table. Research can produce sourced market context without precise option data. Review [Data provenance](DATA_PROVENANCE.md) for the evidence policy and [Known limitations](KNOWN_LIMITATIONS.md) for the implications of web-based coverage.
+Market status uses `America/New_York` and an exchange holiday table. OpenAI supplies Web context. Dedicated feed quotes and broker-attested submissions supply contract inputs when available. Review [Data provenance](DATA_PROVENANCE.md) for the evidence policy and [Known limitations](KNOWN_LIMITATIONS.md) for current provider limits.

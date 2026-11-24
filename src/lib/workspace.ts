@@ -175,7 +175,7 @@ export type AppState = Omit<WorkspaceState, 'usage' | 'reservations' | 'manualQu
   mode: Mode;
   user: { email?: string };
   market: MarketState;
-  research: { configured: boolean; model?: string; pricingConfigured?: boolean; webSearch?: boolean; demoAvailable?: boolean; schedulerConfigured?: boolean };
+  research: { configured: boolean; model?: string; pricingConfigured?: boolean; webSearch?: boolean; demoAvailable?: boolean; schedulerConfigured?: boolean; marketDataConfigured?: boolean };
   candidates: ResearchCandidate[];
   opportunities: Opportunity[];
   analytics: Analytics;

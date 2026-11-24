@@ -6,6 +6,7 @@ import {
 import { z } from "zod";
 import type { Mode, ScanType } from "../workspace";
 import { marketSession } from "./market";
+import { fetchMarketQuotes, MarketDataError, marketDataConfigured } from "./marketData";
 import {
   boundClaim, boundSource, checkNumericAssertion, cleanText, discoverySchema, gatherSources, mergeSources, screenSchema, trustedResearchDomains,
   type Claim,
@@ -73,6 +74,7 @@ export interface AssetResearchInput extends BudgetHooks {
   symbol: string;
   mode: ScanType;
   dataMode: Mode;
+  ownerEmail?: string;
   preferences?: RiskPreferences;
   construction?: Omit<ConstructionContext, "candidate" | "allowDemo">;
   manualQuotes?: ContractQuote[];
@@ -233,6 +235,11 @@ export function providerCapabilities(dataMode: Mode) {
   return new OpenAIWebResearchProvider().getDataCapabilities();
 }
 
+export function marketDataAvailableFor(email?: string | null) {
+  const owner = process.env.MARKETDATA_OWNER_EMAIL?.trim().toLowerCase();
+  return Boolean(owner && email?.trim().toLowerCase() === owner && marketDataConfigured());
+}
+
 function findCachedCandidate(input: AssetResearchInput, symbol: string, now: Date) {
   const previous = input.cachedResult;
   if (input.mode !== "quick" || previous?.status !== "completed" || previous.symbol !== symbol ||
@@ -270,6 +277,8 @@ export async function researchAsset(input: AssetResearchInput): Promise<AssetRes
 
   const provider = new OpenAIWebResearchProvider();
   const manual = new ManualVerifiedQuoteProvider(input.manualQuotes ?? []);
+  const automated = marketDataAvailableFor(input.ownerEmail);
+  const useWeb = !automated || input.mode !== "quick";
   const rejections: string[] = [];
   let examinedSources: EvidenceSource[] = [];
   let candidate: ResearchedCandidate | null = null;
@@ -278,12 +287,12 @@ export async function researchAsset(input: AssetResearchInput): Promise<AssetRes
     now, mode: input.mode, usages, signal: researchSignal(input.signal), hooks: input,
     maxRequests: Math.min(input.maxRequests ?? defaultRequestLimit(), defaultRequestLimit()),
   };
-  const cached = findCachedCandidate(input, symbol, now);
+  const cached = useWeb ? findCachedCandidate(input, symbol, now) : null;
   if (cached?.candidate) {
     candidate = cached.candidate;
     examinedSources = cached.examinedSources ?? candidate.sources;
     rejections.push("Contexte Web récent réutilisé. Cotations et limites contrôlées à nouveau.");
-  } else {
+  } else if (useWeb) {
     await input.onStage?.("screening");
     try {
       const result = await provider.screen(symbol, context);
@@ -298,17 +307,37 @@ export async function researchAsset(input: AssetResearchInput): Promise<AssetRes
   }
 
   const manualQuotes = await manual.getOptionsChain(symbol);
-  if (!candidate && manualQuotes.length === 0) {
+  let marketQuotes: ContractQuote[] = [];
+  if (automated && !context.signal?.aborted) {
+    await input.onStage?.("discovering");
+    try {
+      marketQuotes = await fetchMarketQuotes(symbol, preferences, {
+        now: input.construction?.now ?? new Date(), signal: context.signal,
+      });
+      if (!marketQuotes.length) rejections.push("Market Data n’a fourni aucune cotation récente et standard pour ces échéances.");
+    } catch (error) {
+      rejections.push(error instanceof MarketDataError ? error.message : "La chaîne Market Data est indisponible.");
+    }
+  }
+  const quotes = marketQuotes.length ? marketQuotes : manualQuotes;
+  if (!candidate && quotes.length === 0) {
     return { ...base, status: "failed", rejections, error: degraded, examinedSources, ...usageTotals(usages) };
   }
   if (!candidate) {
     candidate = {
       symbol, name: symbol, price: null, change: null, direction: "insufficient", status: "INSUFFICIENT",
-      thesis: "Contexte Web indisponible. Seules les cotations de courtier attestées sont analysées.",
+      thesis: marketQuotes.length
+        ? "Analyse des cotations indicatives Market Data. Aucune thèse directionnelle n’est établie."
+        : "Contexte Web indisponible. Seules les cotations de courtier attestées sont analysées.",
       risks: [], bullishFactors: [], bearishFactors: [], sources: [], updatedAt: now.toISOString(),
     };
   }
-  if (manualQuotes.length === 0 && input.mode !== "quick" && candidate.direction !== "insufficient" && !degraded) {
+  if (marketQuotes.length) {
+    const marketSources = mergeSources(marketQuotes.map(({ source, retrievedAt }) => ({ ...source, retrievedAt })));
+    candidate = { ...candidate, sources: mergeSources([...candidate.sources, ...marketSources]) };
+    examinedSources = mergeSources([...examinedSources, ...marketSources]);
+  }
+  if (quotes.length === 0 && input.mode !== "quick" && candidate.direction !== "insufficient" && !degraded) {
     await input.onStage?.("discovering");
     try {
       const discovery = await provider.discover(symbol, preferences, context);
@@ -325,12 +354,14 @@ export async function researchAsset(input: AssetResearchInput): Promise<AssetRes
       }
       rejections.push(`Vérification des contrats · ${researchErrorMessage(error)}`);
     }
-  } else if (!manualQuotes.length && input.mode === "quick") {
+  } else if (!automated && !quotes.length && input.mode === "quick") {
     rejections.push("Le scan rapide vérifie les cotations de courtier déjà enregistrées. Le scan approfondi lance une découverte Web des contrats.");
   }
   await input.onStage?.("constructing");
-  const evaluated = constructStrategies(manualQuotes, preferences, {
-    fees: 1.3, ...input.construction, now, candidate, allowDemo: false,
+  const evaluated = constructStrategies(quotes, preferences, {
+    fees: 1.3, ...input.construction,
+    now: automated ? input.construction?.now ?? new Date() : now,
+    candidate, allowDemo: false,
   });
   return {
     symbol, status: "completed", candidate, opportunities: evaluated.opportunities, examinedSources,
