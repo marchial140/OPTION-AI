@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { makeOccSymbol } from '../src/lib/quant';
+import { makeOccSymbol, validateQuote } from '../src/lib/quant';
 import {
   buildPhase2History, contractActionsThrough, normalizeCorporateActionReview, normalizeMarketDataCandles,
-  normalizeMarketDataChain, normalizePointInTimeSnapshot, toResearchQuote, toResearchSpot,
+  normalizeMarketDataChain, normalizePointInTimeSnapshot, toResearchQuote, toResearchSpot, toStudyQuote, toStudySpot,
 } from '../scripts/phase-3/observations';
+import { buildStudyCalendar } from '../scripts/phase-3/protocol';
 
 const rawSha256 = 'c'.repeat(64);
 const retrievedAt = '2026-11-25T17:00:00Z';
@@ -81,6 +82,50 @@ describe('Phase 3 normalized market observations', () => {
     expect(batch.rows[0].availability.at).toBe('2024-11-29T14:31:00.000Z');
     // The publication rule does not relax the existing risk engine's freshness check after a holiday.
     expect(() => toResearchQuote(batch.rows[0], batch, new Date('2024-11-29T14:45:00Z'))).toThrow(/Historical risk eligibility/u);
+  });
+
+  it('separates signal, revalidation and fill observations and preserves displayed size', () => {
+    const schedule = buildStudyCalendar().signals[0];
+    const revalidation = normalizeMarketDataChain({ ...optionColumns(), updated: [epoch('2024-10-22T20:00:00Z')],
+      askSize: [0] }, chainReceipt('2024-10-22'));
+    const fill = normalizeMarketDataChain({ ...optionColumns(), updated: [epoch('2024-10-23T20:00:00Z')],
+      askSize: [null] }, chainReceipt('2024-10-23'));
+    const candles = normalizeMarketDataCandles({ s: 'ok', t: [21, 22, 23].map((day) => epoch(`2024-10-${day}T04:00:00Z`)),
+      c: [576, 580, 900] }, candleReceipt());
+
+    expect(toStudySpot(candles.rows[0], candles, schedule, 'signal').price).toBe(576);
+    expect(toStudySpot(candles.rows[1], candles, schedule, 'revalidation').price).toBe(580);
+    expect(() => toStudySpot(candles.rows[2], candles, schedule, 'revalidation')).toThrow(/scheduled decision session/u);
+    expect(toStudyQuote(revalidation.rows[0], revalidation, schedule, 'revalidation')).toMatchObject({
+      quoteAt: '2024-10-22T20:00:00.000Z', retrievedAt: '2024-10-23T13:31:00.000Z', bidSize: 3, askSize: 0,
+    });
+    expect(toStudyQuote(fill.rows[0], fill, schedule, 'fill')).toMatchObject({
+      quoteAt: '2024-10-23T20:00:00.000Z', retrievedAt: '2024-10-24T13:31:00.000Z', bidSize: 3, askSize: undefined,
+    });
+    expect(() => toStudyQuote(fill.rows[0], fill, schedule, 'revalidation')).toThrow(/scheduled study session/u);
+    expect(() => toStudyQuote(revalidation.rows[0], revalidation, { ...schedule, orderAt: '2024-10-23T13:30:59Z' }, 'revalidation'))
+      .toThrow(/unavailable/u);
+  });
+
+  it('keeps the New Year publication and stale quote as distinct research facts', () => {
+    const schedule = buildStudyCalendar().signals.find(({ signalDate }) => signalDate === '2024-12-30')!;
+    const id = makeOccSymbol(symbol, '2025-01-17', 'call', 575);
+    const batch = normalizeMarketDataChain({ ...optionColumns(), optionSymbol: [id], expiration: [epoch('2025-01-17T21:00:00Z')],
+      updated: [epoch('2024-12-31T21:00:00Z')] }, chainReceipt('2024-12-31'));
+    expect(batch.issues).toEqual([]);
+    const quote = toStudyQuote(batch.rows[0], batch, schedule, 'revalidation');
+    expect(quote.retrievedAt).toBe('2025-01-02T14:31:00.000Z');
+    expect((Date.parse(schedule.orderAt) - Date.parse(quote.quoteAt)) / 3_600_000).toBe(41.75);
+    expect(validateQuote(quote, symbol, new Date(schedule.orderAt))).toMatchObject({ valid: false, status: 'STALE' });
+  });
+
+  it('reports absent data without creating a quote and rejects a premature empty receipt', () => {
+    expect(normalizeMarketDataChain({ s: 'no_data' }, chainReceipt())).toMatchObject({ rows: [], rawRows: 0,
+      issues: [{ code: 'empty' }] });
+    expect(() => normalizeMarketDataChain({ s: 'no_data' }, { ...chainReceipt(), retrievedAt: '2024-10-22T13:30:59Z' }))
+      .toThrow(/inconsistent/u);
+    expect(normalizeMarketDataChain({ ...optionColumns(), bid: [null] }, chainReceipt())).toMatchObject({ rows: [],
+      issues: [{ index: 0, code: 'invalid-row' }] });
   });
 
   it('quarantines crossed, adjusted, and mismatched contracts and rejects a hit sentinel', () => {

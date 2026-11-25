@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { contractQuoteSchema, makeOccSymbol, optionTradingCutoff, validateQuote, type ContractQuote } from '../../src/lib/quant';
 import { marketSession } from '../../src/lib/server/market';
 import { instant, type PriceHistory, type SpotObservation } from '../phase-2/history';
-import { nextStudySession, phase3Protocol, studyMorning } from './protocol';
+import { nextStudySession, phase3Protocol, studyMorning, type SignalSchedule } from './protocol';
 
 const minute = 60_000;
 const dateSchema = z.iso.date();
@@ -59,6 +59,10 @@ function regularClose(session: string): number {
 
 function regularOpen(session: string): number {
   return instant(studyMorning(session, 31)) - minute;
+}
+
+export function marketDataChainAvailability(session: string): string {
+  return studyMorning(nextStudySession(session), 31);
 }
 
 function checkedTime(observedAt: string, availability: Availability, actualRetrievedAt: string) {
@@ -188,13 +192,13 @@ export function normalizeMarketDataChain(payload: unknown, receipt: ChainReceipt
   marketDataUrl(sourceUrl, `/v1/options/chain/${requestedSymbol}/`, { date: requestedDate, nonstandard: 'false', dateformat: 'unix', limit: String(sentinel) });
   const provenance = { ...details, provider: 'Market Data', actualRetrievedAt: retrievedAt };
   const requestedClose = regularClose(requestedDate);
+  const times = checkedTime(instantIso(requestedClose), { at: marketDataChainAvailability(requestedDate),
+    kind: 'reconstructed', evidence: marketDataPolicyUrl }, retrievedAt);
   const raw = marketDataEnvelope.parse(payload);
   if (raw.s === 'no_data') return { version: 1, kind: 'chain', provenance, rows: [], issues: [emptyIssue], rawRows: 0 };
   const { result, size } = columns(raw, requiredOptionColumns, optionalOptionColumns);
   if (size >= sentinel) return { version: 1, kind: 'chain', provenance, rows: [], rawRows: size,
     issues: [{ index: null, code: 'cap', message: 'Provider sentinel reached. Chain completeness is unverified.' }] };
-  const times = checkedTime(instantIso(requestedClose), { at: studyMorning(nextStudySession(requestedDate), 31),
-    kind: 'reconstructed', evidence: marketDataPolicyUrl }, retrievedAt);
   const issues: NormalizationIssue[] = size ? [] : [emptyIssue];
   const book = keepUnambiguous<NormalizedQuote>(issues, ({ optionSymbol }) => optionSymbol);
   for (let i = 0; i < size; i++) {
@@ -229,8 +233,9 @@ export function normalizePointInTimeSnapshot(payload: unknown, receipt: Licensed
   const { requestedSymbol, requestedDate, retrievedAt } = details;
   const raw = licensedSnapshotSchema.parse(payload);
   const close = regularClose(requestedDate);
-  const when = close - phase3Protocol.timeline.preCloseSnapshotMinutes * minute;
-  const order = close - phase3Protocol.timeline.orderLockMinutes * minute;
+  // The licensed snapshot importer preserves the original Phase 3 intraday archive contract.
+  const when = close - 45 * minute;
+  const order = close - 20 * minute;
   const prepare = (row: z.output<typeof licensedSpotSchema> | z.output<typeof licensedOptionSchema>) => {
     if (row.symbol !== requestedSymbol || instant(row.observedAt) !== when || instant(row.availableAt) > order) {
       throw new Error('Snapshot symbol, observation window or availability misses the pre-close order clock.');
@@ -339,7 +344,7 @@ export function toResearchSpot(row: NormalizedClose | NormalizedSpot, asOf: Date
   return { symbol: row.symbol, price, observedAt: row.observedAt, availableAt: row.availability.at };
 }
 
-export function toResearchQuote(row: NormalizedQuote, batch: NormalizedChain | NormalizedSnapshot, asOf: Date): ContractQuote {
+function projectResearchQuote(row: NormalizedQuote, batch: NormalizedChain | NormalizedSnapshot, asOf: Date): ContractQuote {
   const { observedAt, availability } = checkedTime(row.observedAt, row.availability, batch.provenance.actualRetrievedAt);
   if (!Number.isFinite(asOf.getTime()) || row.symbol !== batch.provenance.requestedSymbol || row.session !== batch.provenance.requestedDate
     || instant(availability.at) > asOf.getTime()) {
@@ -347,7 +352,7 @@ export function toResearchQuote(row: NormalizedQuote, batch: NormalizedChain | N
   }
   const keep = (value: number | undefined, at: string | undefined) => value !== undefined && at !== undefined && instant(at) <= asOf.getTime()
     ? value : undefined;
-  const candidate = contractQuoteSchema.parse({
+  return contractQuoteSchema.parse({
     id: row.optionSymbol, symbol: row.symbol, type: row.type, strike: row.strike, expiration: row.expiration,
     multiplier: row.multiplier, currency: row.currency, bid: row.bid, ask: row.ask,
     quoteAt: observedAt,
@@ -357,9 +362,47 @@ export function toResearchQuote(row: NormalizedQuote, batch: NormalizedChain | N
       citation: `Observed at ${row.observedAt}; ${row.availability.kind} availability ${row.availability.at}; archive retrieved at ${batch.provenance.actualRetrievedAt}.` },
     volume: keep(row.volume, row.volumeAvailableAt), openInterest: keep(row.openInterest, row.openInterestAvailableAt), status: 'VERIFIED_DELAYED',
   });
+}
+
+export function toResearchQuote(row: NormalizedQuote, batch: NormalizedChain | NormalizedSnapshot, asOf: Date): ContractQuote {
+  const candidate = projectResearchQuote(row, batch, asOf);
   const validation = validateQuote(candidate, row.symbol, asOf);
   if (!validation.valid) throw new Error(`Historical risk eligibility: ${validation.reason ?? validation.status}`);
   return candidate;
+}
+
+type StudyQuoteStage = 'signal' | 'revalidation' | 'fill';
+
+function studyDecisionStage(schedule: SignalSchedule, stage: Exclude<StudyQuoteStage, 'fill'>) {
+  return stage === 'signal' ? { session: schedule.signalDate, cutoff: schedule.signalAt }
+    : { session: schedule.revalidationDate, cutoff: schedule.orderAt };
+}
+
+export function toStudySpot(row: NormalizedClose, batch: NormalizedCandles, schedule: SignalSchedule,
+  stage: Exclude<StudyQuoteStage, 'fill'>): SpotObservation {
+  const { session, cutoff } = studyDecisionStage(schedule, stage);
+  const close = regularClose(session);
+  if (row.session !== session || row.symbol !== batch.provenance.requestedSymbol || row.basis !== closingBasis
+    || row.observationKind !== 'session-close-from-daily-candle' || instant(row.observedAt) !== close
+    || row.availability.kind !== 'reconstructed' || instant(row.availability.at) !== close + phase3Protocol.timeline.stockAvailabilityLagMinutes * minute) {
+    throw new Error('Underlying observation does not match the scheduled decision session.');
+  }
+  checkedTime(row.observedAt, row.availability, batch.provenance.actualRetrievedAt);
+  return toResearchSpot(row, new Date(cutoff));
+}
+
+export function toStudyQuote(row: NormalizedQuote, batch: NormalizedChain, schedule: SignalSchedule,
+  stage: StudyQuoteStage): ContractQuote & Pick<NormalizedQuote, 'bidSize' | 'askSize'> {
+  const { session, cutoff } = stage === 'fill'
+    ? { session: schedule.entryDate, cutoff: marketDataChainAvailability(schedule.entryDate) }
+    : studyDecisionStage(schedule, stage);
+  if (row.session !== session || row.observationKind !== 'provider' || instant(row.observedAt) !== regularClose(session)
+    || row.availability.kind !== 'reconstructed' || instant(row.availability.at) !== instant(marketDataChainAvailability(session))) {
+    throw new Error('Option observation does not match the scheduled study session.');
+  }
+  // Archive evidence remains intact even when the original freshness or expiry gate rejects the trade.
+  const quote = projectResearchQuote(row, batch, new Date(cutoff));
+  return { ...quote, bidSize: count.optional().parse(row.bidSize), askSize: count.optional().parse(row.askSize) };
 }
 
 export function contractActionsThrough(review: NormalizedActionReview, row: NormalizedQuote, decision?: Date): CorporateAction[] {

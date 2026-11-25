@@ -1,15 +1,14 @@
-import { lstat, mkdir, readFile, realpath } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { acquireMarketData, hashAcquisitionPlan, readAcquisitionRaw, readAcquisitionReceipts, sha256, type AcquisitionResult } from './acquisition';
 import { phase3ApprovalSchema, seriesInventorySchema, validatePhase3Dataset } from './gates';
-import { buildCostEstimate, buildRequestManifest, frozenProtocolCommit, manifestSha256, resolveChainRequests } from './manifest';
-import { normalizeCorporateActionReview, normalizeMarketDataCandles, normalizeMarketDataChain, normalizePointInTimeSnapshot } from './observations';
+import { buildCostEstimate, buildRequestManifest, frozenProtocolCommit, manifestSha256, resolveChainRequests, type ManifestScope } from './manifest';
+import { normalizeCorporateActionReview, normalizeMarketDataCandles, normalizeMarketDataChain, type NormalizedChain } from './observations';
 import { phase3Protocol } from './protocol';
 
 const p = phase3Protocol;
-const requestManifest = buildRequestManifest();
-const digest = manifestSha256(requestManifest);
+type RequestManifest = ReturnType<typeof buildRequestManifest>;
 const sha = z.string().regex(/^[a-f0-9]{64}$/u);
 const stage = z.object({ planSha256: sha, maxRequests: z.number().int().positive(), maxCredits: z.number().int().positive() }).strict();
 const accessSchema = z.object({
@@ -24,7 +23,6 @@ const accessSchema = z.object({
 const fileReference = z.object({ file: z.string().min(1), provider: z.string().min(1), retrievedAt: z.iso.datetime({ offset: true }),
   symbol: z.enum(p.symbols), sourceUrl: z.url() }).strict();
 const licensedIndexSchema = z.object({
-  preClose: z.array(fileReference.extend({ date: z.iso.date() })),
   corporateActions: z.array(fileReference),
   inventories: z.array(z.object({ file: z.string().min(1), provider: z.string().min(1), retrievedAt: z.iso.datetime({ offset: true }) }).strict()),
 }).strict();
@@ -64,7 +62,7 @@ function parseJson(bytes: Uint8Array): unknown {
 
 type Access = z.output<typeof accessSchema>;
 
-async function readAccess(root: string, name: string) {
+async function readAccess(root: string, name: string, requestManifest: RequestManifest) {
   let bytes: Uint8Array;
   try { bytes = await readPrivate(root, name); }
   catch (error) {
@@ -78,9 +76,14 @@ async function readAccess(root: string, name: string) {
   const hashes = await Promise.all(access.evidenceFiles.map(async (file) => sha256(await readPrivate(root, file))));
   const now = new Date().toISOString();
   const quotas = [access.candles, ...(access.chains ? [access.chains] : [])];
-  if (approval.protocolCommit !== frozenProtocolCommit || approval.requestManifestSha256 !== digest
+  if (approval.protocolCommit !== frozenProtocolCommit || approval.requestManifestSha256 !== manifestSha256(requestManifest)
     || Date.parse(approval.approvedAt) > Date.parse(now) || !hashes.includes(approval.evidenceSha256)
     || approval.providers.some((grant) => !hashes.includes(grant.evidenceSha256) || Date.parse(grant.retainForResearchUntil) < Date.parse(now))
+    || new Set(approval.providers.map(({ provider }) => provider)).size !== approval.providers.length
+    || access.candles.planSha256 !== hashAcquisitionPlan(requestManifest.candles)
+    || (requestManifest.scope === 'coverage' && (access.budget.maxRequests > 24 || access.budget.maxCredits > 96
+      || access.candles.maxRequests > 6 || access.candles.maxCredits > 6
+      || (access.chains !== undefined && (access.chains.maxRequests > 18 || access.chains.maxCredits > 90))))
     || quotas.reduce((sum, quota) => sum + quota.maxRequests, 0) > access.budget.maxRequests
     || quotas.reduce((sum, quota) => sum + quota.maxCredits, 0) > access.budget.maxCredits) {
     throw new Error('Authorization evidence, frozen plan, retention dates, or combined limits did not match.');
@@ -88,12 +91,25 @@ async function readAccess(root: string, name: string) {
   return { access, hashes };
 }
 
-function requireMarketDataScope(access: Access, roles: ('candles' | 'signal' | 'fill')[]) {
-  const from = roles.includes('candles') ? p.warmupStartDate : p.startDate;
-  const to = roles.includes('candles') ? p.cutoffDate : requestManifest.signals.at(-1)!.entryDate;
+function requireMarketDataScope(access: Access, requestManifest: RequestManifest) {
+  const roles = ['candles', 'signal', 'revalidation', 'fill'] as const;
+  const from = requestManifest.closeDates[0];
+  const to = requestManifest.closeDates.at(-1)!;
   const grant = access.authorization.providers.find((item) => item.provider === 'Market Data');
   if (!grant || grant.historicalFrom > from || grant.historicalTo < to || roles.some((role) => !grant.roles.includes(role))) {
     throw new Error('Market Data scope does not cover the requested dates and roles.');
+  }
+}
+
+function requireStudyEvidenceScopes(access: Access, requestManifest: RequestManifest) {
+  if (requestManifest.scope !== 'study') return;
+  const from = requestManifest.closeDates[0];
+  const to = requestManifest.closeDates.at(-1)!;
+  const grants = access.authorization.providers;
+  if (!grants.some((grant) => grant.roles.includes('corporate-actions') && grant.historicalFrom <= from && grant.historicalTo >= to)
+    || !grants.some((grant) => grant.roles.includes('series') && grant.historicalFrom <= p.startDate
+      && grant.historicalTo >= requestManifest.signals.at(-1)!.signalDate)) {
+    throw new Error('Documented private rights and date coverage for corporate actions and the listed-series inventory are required.');
   }
 }
 
@@ -104,7 +120,7 @@ function complete(result: AcquisitionResult, count: number, approvedAt: string) 
   }
 }
 
-async function readCandles(root: string, approvedAt: string) {
+async function readCandles(root: string, approvedAt: string, requestManifest: RequestManifest) {
   const requests = requestManifest.candles;
   const cacheDirectory = resolve(root, 'candles');
   const result = await readAcquisitionReceipts({ requests, cacheDirectory });
@@ -119,7 +135,8 @@ async function readCandles(root: string, approvedAt: string) {
       || rows.some((row, i) => row.session !== requestManifest.closeDates[i]))) {
     throw new Error('Consecutive warm-up and settlement candle coverage failed.');
   }
-  return { packs, result, requests: resolveChainRequests(packs.flatMap(({ rows }) => rows.map(({ symbol, session, close }) => ({ symbol, date: session, close })))) };
+  const prices = packs.flatMap(({ rows }) => rows.map(({ symbol, session, close }) => ({ symbol, date: session, close })));
+  return { packs, result, requests: resolveChainRequests(prices, requestManifest.scope) };
 }
 
 function budgetSummary(result: AcquisitionResult) {
@@ -127,30 +144,75 @@ function budgetSummary(result: AcquisitionResult) {
     unresolvedReservations: result.unresolvedReservations, completeReceipts: result.receipts.length };
 }
 
-export async function runPhase3(command: string, options: { privateDirectory: string; approvalFile: string; licensedIndex: string; token?: string }) {
+async function saveChainPlan(root: string, plan: { planSha256: string; requests: readonly PlannedChain[] }) {
+  const filename = 'options-request-plan.json';
+  const contents = JSON.stringify(plan, null, 2) + '\n';
+  try { await writeFile(resolve(root, filename), contents, { mode: 0o600, flag: 'wx' }); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== 'EEXIST') throw error;
+    if ((await readPrivate(root, filename)).toString('utf8') !== contents) {
+      throw new Error('The existing private options plan differs from the derived requests. Review the evidence before proceeding.');
+    }
+  }
+  return filename;
+}
+
+type PlannedChain = ReturnType<typeof resolveChainRequests>[number];
+type ChainPack = { role: PlannedChain['role']; pack: NormalizedChain };
+
+function reportTechnicalCoverage(chainPacks: readonly ChainPack[], manifest: RequestManifest, digest: string) {
+  const panels = manifest.symbols.map((symbol) => {
+    const stages = chainPacks.filter(({ pack }) => pack.provenance.requestedSymbol === symbol);
+    const signal = stages.find(({ role }) => role === 'signal')?.pack;
+    const ids = new Set(signal?.rows.map(({ optionSymbol }) => optionSymbol));
+    return { symbol, stages: stages.map(({ role, pack }) => ({ role,
+      session: pack.provenance.requestedDate, rows: pack.rows.length, issues: pack.issues.length,
+      rowsWithBothSizes: pack.rows.filter(({ bidSize, askSize }) => bidSize !== undefined && askSize !== undefined).length,
+      matchingSignalRows: pack.rows.filter(({ optionSymbol }) => ids.has(optionSymbol)).length,
+    })) };
+  });
+  const complete = panels.every(({ stages }) => stages.length === 3 && stages.every(({ rows, issues, rowsWithBothSizes, matchingSignalRows }) => (
+    rows > 0 && issues === 0 && rowsWithBothSizes === rows && matchingSignalRows > 0
+  )));
+  return { kind: 'technical-coverage-only', status: complete ? 'coverage-observed' : 'blocked', protocolCommit: frozenProtocolCommit,
+    requestManifestSha256: digest, panels };
+}
+
+export async function runPhase3(command: string, options: {
+  privateDirectory: string; approvalFile: string; licensedIndex: string; token?: string; scope?: ManifestScope;
+}) {
+  const requestManifest = buildRequestManifest(options.scope);
+  const digest = manifestSha256(requestManifest);
   if (command === 'manifest') return requestManifest;
   if (command === 'cost') return buildCostEstimate();
   if (command === 'fingerprints') return { protocolCommit: frozenProtocolCommit, requestManifestSha256: digest,
     candlesPlanSha256: hashAcquisitionPlan(requestManifest.candles) };
-  if (!['acquire-candles', 'prepare-chains', 'acquire-chains', 'validate'].includes(command)) throw new Error('Unknown Phase 3 command.');
+  if (!['verify-entitlements', 'acquire-candles', 'prepare-chains', 'acquire-chains', 'validate'].includes(command)) throw new Error('Unknown Phase 3 command.');
   const root = await privateRoot(options.privateDirectory);
-  const { access, hashes } = await readAccess(root, options.approvalFile);
+  const { access, hashes } = await readAccess(root, options.approvalFile, requestManifest);
   const { approvedAt } = access.authorization;
-  requireMarketDataScope(access, ['candles']);
+  requireMarketDataScope(access, requestManifest);
+  requireStudyEvidenceScopes(access, requestManifest);
+  if (command === 'verify-entitlements') return { status: 'documentary-approval-verified', scope: requestManifest.scope,
+    accountCheck: 'manual-account-dashboard-and-provider-confirmation', protocolCommit: frozenProtocolCommit,
+    requestManifestSha256: digest, approvedProviders: access.authorization.providers.map(({ provider, roles, historicalFrom, historicalTo }) => (
+      { provider, roles, historicalFrom, historicalTo }
+    )), budget: access.budget };
   if (command === 'acquire-candles') {
     const result = await acquireMarketData({ requests: requestManifest.candles, approval: access.candles,
       cacheDirectory: resolve(root, 'candles'), token: options.token });
     return budgetSummary(result);
   }
 
-  const candles = await readCandles(root, approvedAt);
+  const candles = await readCandles(root, approvedAt, requestManifest);
   const requests = candles.requests;
   if (command === 'prepare-chains') {
-    return { protocolCommit: frozenProtocolCommit, requestManifestSha256: digest, planSha256: hashAcquisitionPlan(requests),
+    const planSha256 = hashAcquisitionPlan(requests);
+    const privatePlanFile = await saveChainPlan(root, { planSha256, requests });
+    return { protocolCommit: frozenProtocolCommit, requestManifestSha256: digest, planSha256, privatePlanFile,
       requests: requests.length, reservedCredits: requests.reduce((sum, item) => sum + item.reservedCredits, 0) };
   }
 
-  requireMarketDataScope(access, ['signal', 'fill']);
   if (!access.chains || access.chains.planSha256 !== hashAcquisitionPlan(requests)) throw new Error('The exact derived chain plan requires explicit approval.');
   const cacheDirectory = resolve(root, 'chains');
   if (command === 'acquire-chains') {
@@ -168,7 +230,7 @@ export async function runPhase3(command: string, options: { privateDirectory: st
   const chains = await readAcquisitionReceipts({ requests, cacheDirectory });
   complete(chains, requests.length, approvedAt);
   const plannedById = new Map(requests.map((request) => [request.id, request]));
-  const chainPacks = [];
+  const chainPacks: ChainPack[] = [];
   for (const receipt of chains.receipts) {
     const request = plannedById.get(receipt.id)!;
     chainPacks.push({ role: request.role, pack: normalizeMarketDataChain(await readAcquisitionRaw({ cacheDirectory, receipt }), {
@@ -176,6 +238,7 @@ export async function runPhase3(command: string, options: { privateDirectory: st
       retrievedAt: receipt.retrievedAt, rawSha256: receipt.rawSha256,
     }) });
   }
+  if (requestManifest.scope === 'coverage') return reportTechnicalCoverage(chainPacks, requestManifest, digest);
   const index = licensedIndexSchema.parse(parseJson(await readPrivate(root, options.licensedIndex)));
   const verifiedRawSha256s = [...hashes, ...[...candles.result.receipts, ...chains.receipts].map(({ rawSha256 }) => rawSha256)];
   const readArtifact = async (file: string) => {
@@ -184,13 +247,6 @@ export async function runPhase3(command: string, options: { privateDirectory: st
     verifiedRawSha256s.push(rawSha256);
     return { raw: parseJson(bytes), rawSha256 };
   };
-  const preCloseSnapshots = [];
-  for (const row of index.preClose) {
-    const { raw, rawSha256 } = await readArtifact(row.file);
-    preCloseSnapshots.push(normalizePointInTimeSnapshot(raw, {
-      provider: row.provider, requestedDate: row.date, requestedSymbol: row.symbol, sourceUrl: row.sourceUrl, retrievedAt: row.retrievedAt, rawSha256,
-    }));
-  }
   const corporateActions = [];
   for (const row of index.corporateActions) {
     const { raw, rawSha256 } = await readArtifact(row.file);
@@ -204,10 +260,14 @@ export async function runPhase3(command: string, options: { privateDirectory: st
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid listed-series input.');
     inventories.push(seriesInventorySchema.parse({ ...raw, provenance: { provider: row.provider, actualRetrievedAt: row.retrievedAt, rawSha256 } }));
   }
-  return validatePhase3Dataset({ approval: access.authorization, protocolCommit: frozenProtocolCommit,
-    requestManifestSha256: digest, verifiedRawSha256s, verifiedAt: new Date().toISOString(), dataset: {
-      acquisitionClass: 'observed', candles: candles.packs, corporateActions, inventories, preCloseSnapshots,
+  const verifiedAt = new Date().toISOString();
+  const readiness = validatePhase3Dataset({ approval: access.authorization, protocolCommit: frozenProtocolCommit,
+    requestManifestSha256: digest, verifiedRawSha256s, verifiedAt, dataset: {
+      acquisitionClass: 'observed', candles: candles.packs, corporateActions, inventories,
       signalChains: chainPacks.filter(({ role }) => role === 'signal').map(({ pack }) => pack),
+      revalidationChains: chainPacks.filter(({ role }) => role === 'revalidation').map(({ pack }) => pack),
       fillChains: chainPacks.filter(({ role }) => role === 'fill').map(({ pack }) => pack),
     } });
+  return { kind: 'study-readiness', protocolCommit: frozenProtocolCommit, requestManifestSha256: digest, verifiedAt,
+    acquisition: { candles: budgetSummary(candles.result), chains: budgetSummary(chains) }, ...readiness };
 }

@@ -1,12 +1,12 @@
 import Decimal from 'decimal.js';
 import {
-  assessRisk, calculateStrategy, daysToExpiration, defaultRiskPreferences, makeOccSymbol, optionTradingCutoff, payoffAt,
+  assessRisk, calculateStrategy, daysToExpiration, defaultRiskPreferences, makeOccSymbol, optionTradingCutoff, payoffAt, validateQuote,
   type ContractQuote, type StrategyInput,
 } from '../../src/lib/quant';
 import { evaluateResearchCandidate, type Model, type Mode, type ResearchInputs } from '../phase-2/decision';
 import { instant } from '../phase-2/history';
 import { contractActionsThrough, type NormalizedActionReview, type NormalizedQuote } from './observations';
-import { buildStudyCalendar, phase3Protocol, type SignalSchedule } from './protocol';
+import { buildSignalSchedule, buildStudyCalendar, phase3Protocol, type SignalSchedule } from './protocol';
 
 type Configuration = keyof typeof phase3Protocol.configurations;
 type SignalState = 'selected' | 'submitted' | 'filled' | 'no_trade' | 'rejected' | 'missing_data';
@@ -29,6 +29,15 @@ export interface ExpirationObservation {
   price: number;
   observedAt: string;
   availableAt: string;
+}
+
+interface NoBookObservation {
+  role: 'revalidation' | 'fill';
+  optionSymbol: string;
+  observedAt: string;
+  availableAt: string;
+  disposition: 'no-quote' | 'halted';
+  evidence: string;
 }
 
 const rules = phase3Protocol.portfolio;
@@ -99,7 +108,13 @@ export class ResearchPortfolioLedger {
 
   constructor(configuration: Configuration, schedule: readonly SignalSchedule[] = buildStudyCalendar().signals) {
     this.#configuration = configuration;
-    this.#schedule = new Map(schedule.map((signal) => [signal.signalDate, { ...signal }]));
+    this.#schedule = new Map(schedule.map((signal) => {
+      const expected = buildSignalSchedule(signal.signalDate);
+      if ((Object.keys(expected) as (keyof SignalSchedule)[]).some((key) => expected[key] !== signal[key])) {
+        throw new Error('Portfolio schedule differs from the frozen two-session execution timeline.');
+      }
+      return [signal.signalDate, expected];
+    }));
     if (this.#schedule.size !== schedule.length) throw new Error('Duplicate signal in portfolio schedule.');
   }
 
@@ -207,6 +222,26 @@ export class ResearchPortfolioLedger {
     return this.#endSignal(signalDate, 'rejected', 'known_contract_adjustment');
   }
 
+  // The readiness gate independently verifies the no-book disposition and its raw evidence.
+  rejectKnownNoBook(signalDate: string, evidence: NoBookObservation) {
+    const schedule = this.#date(signalDate);
+    const isFill = evidence.role === 'fill';
+    const state = this.#state(signalDate, isFill ? 'submitted' : 'selected');
+    const at = isFill ? schedule.fillAt : schedule.orderAt;
+    const time = this.#event(at, false);
+    const observedAt = knownTime(evidence.observedAt);
+    const availableAt = knownTime(evidence.availableAt);
+    if (observedAt !== knownTime(isFill ? schedule.fillAt : schedule.revalidationObservedAt)
+      || availableAt < observedAt || availableAt > (isFill ? cutoff : time)
+      || !evidence.evidence.trim() || (evidence.disposition !== 'halted' && evidence.disposition !== 'no-quote')
+      || !state.selection?.legs.some((leg) => identity(leg) === evidence.optionSymbol)) {
+      throw new Error('No matching, timely no-book evidence exists for a selected leg.');
+    }
+    this.#event(at);
+    if (this.#priorSettlementDue(time)) return this.#endSignal(signalDate, 'missing_data', 'prior_expiration_settlement_unprocessed');
+    return this.#endSignal(signalDate, 'rejected', `${evidence.role}_${evidence.disposition === 'halted' ? 'halted' : 'no_quote'}`);
+  }
+
   select(signalDate: string, input: StrategyInput) {
     if (this.#configuration === 'H') throw new Error('The cash benchmark cannot select a position.');
     const schedule = this.#date(signalDate);
@@ -238,16 +273,23 @@ export class ResearchPortfolioLedger {
     if (this.#priorSettlementDue(time)) return this.#endSignal(signalDate, 'missing_data', 'prior_expiration_settlement_unprocessed');
     if (!input) return this.#endSignal(signalDate, 'missing_data', 'missing_revalidation_quote');
     try {
-      this.#checkInputs(input, time, knownTime(schedule.revalidationObservedAt));
+      const observedAt = knownTime(schedule.revalidationObservedAt);
+      this.#checkInputs(input, time, observedAt);
       if (!sameLegs(current.selection!, input)) return this.#endSignal(signalDate, 'missing_data', 'selected_legs_changed');
       const sizeFailure = displayedSizeFailure(input);
       if (sizeFailure) return this.#endSignal(signalDate, sizeFailure.status, sizeFailure.reason);
+      if (input.legs.some((leg) => validateQuote(leg, input.legs[0].symbol, new Date(time)).status === 'STALE')) {
+        return this.#endSignal(signalDate, 'rejected', 'stale_revalidation_quote');
+      }
       const result = this.#checkRisk(input, time, signalDate, 'order');
       if (!result.cost) return this.#endSignal(signalDate, 'rejected', result.reason!);
       const economicRule = economicRules[this.#configuration];
       if (economicRule) {
-        if (!economics?.spot || instant(economics.spot.observedAt) !== knownTime(schedule.revalidationObservedAt)) {
-          return this.#endSignal(signalDate, 'missing_data', 'missing_contemporaneous_economic_revalidation');
+        const spot = economics?.spot;
+        if (!spot || instant(spot.observedAt) !== observedAt || !economics?.history?.closes.some((close) => (
+          close.session === schedule.revalidationDate && close.close === spot.price && instant(close.availableAt) <= time
+        ))) {
+          return this.#endSignal(signalDate, 'missing_data', 'missing_or_inconsistent_revalidation_close');
         }
         const evaluation = evaluateResearchCandidate({ ...economics, asOf: new Date(time), preferences, risk: this.#riskContext(signalDate) }, input);
         if (evaluation.status !== 'ok') return this.#endSignal(signalDate, 'missing_data', evaluation.reasons.join(' | '));

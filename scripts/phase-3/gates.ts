@@ -3,12 +3,11 @@ import Decimal from 'decimal.js';
 import { z } from 'zod';
 import { makeOccSymbol, optionTradingCutoff } from '../../src/lib/quant';
 import { instant, prepareReturnHistory } from '../phase-2/history';
-import { buildPhase2History, contractActionsThrough, type NormalizedActionReview, type NormalizedCandles,
-  type NormalizedChain, type NormalizedQuote, type NormalizedSnapshot } from './observations';
-import { addCalendarDays, buildStudyCalendar, nextStudySession, phase3Protocol as protocol,
-  studyMorning, type SignalSchedule, type StudySymbol } from './protocol';
+import { buildPhase2History, contractActionsThrough, marketDataChainAvailability, type NormalizedActionReview, type NormalizedCandles,
+  type NormalizedChain, type NormalizedQuote } from './observations';
+import { addCalendarDays, buildStudyCalendar, phase3Protocol as protocol, type SignalSchedule, type StudySymbol } from './protocol';
 
-const roles = ['candles', 'signal', 'preclose', 'fill', 'series', 'corporate-actions'] as const;
+const roles = ['candles', 'signal', 'revalidation', 'fill', 'series', 'corporate-actions'] as const;
 type ProviderRole = typeof roles[number];
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const commitSchema = z.string().regex(/^[a-f0-9]{40}$/u);
@@ -51,7 +50,7 @@ export const seriesInventorySchema = z.object({
     deliverable: z.literal('100-underlying-shares'),
   }).strict()).nonempty(),
   noBook: z.array(z.object({
-    role: z.enum(['signal', 'preclose', 'fill']),
+    role: z.enum(['signal', 'revalidation', 'fill']),
     optionSymbol: z.string().min(1).max(32),
     observedAt: timestamp,
     availableAt: timestamp,
@@ -66,7 +65,7 @@ export interface Phase3Dataset {
   acquisitionClass: 'observed' | 'mock';
   candles: readonly NormalizedCandles[];
   signalChains: readonly NormalizedChain[];
-  preCloseSnapshots: readonly NormalizedSnapshot[];
+  revalidationChains: readonly NormalizedChain[];
   fillChains: readonly NormalizedChain[];
   inventories: readonly SeriesInventory[];
   corporateActions: readonly NormalizedActionReview[];
@@ -91,6 +90,7 @@ function canonicalJson(value: unknown): string {
 
 export const canonicalSha256 = (value: unknown) => createHash('sha256').update(canonicalJson(value)).digest('hex');
 const minute = 60_000;
+const historicalQuoteAgeLimit = protocol.timeline.maxHistoricalQuoteAgeHours * 60 * minute;
 const issueSampleLimit = 120;
 
 function recordTime(observedAt: string, availableAt: string, retrievedAt: string, clock: number, latestAvailableAt: number) {
@@ -181,18 +181,18 @@ export function validatePhase3Dataset(input: Phase3GateInput) {
   const candlesBySymbol = index(dataset.candles, 'candles', (pack) => pack.provenance.requestedSymbol);
   const reviewsBySymbol = index(dataset.corporateActions, 'corporate-actions', (pack) => pack.provenance.requestedSymbol);
   const pair = (symbol: string, date: string) => `${symbol}:${date}`;
-  const byRequestedDate = (pack: NormalizedChain | NormalizedSnapshot) => pair(pack.provenance.requestedSymbol, pack.provenance.requestedDate);
+  const byRequestedDate = (pack: NormalizedChain) => pair(pack.provenance.requestedSymbol, pack.provenance.requestedDate);
   const signalByPair = index(dataset.signalChains, 'signal', byRequestedDate);
-  const precloseByPair = index(dataset.preCloseSnapshots, 'preclose', byRequestedDate);
+  const revalidationByPair = index(dataset.revalidationChains, 'revalidation', byRequestedDate);
   const fillByPair = index(dataset.fillChains, 'fill', byRequestedDate);
   const inventories = index(dataset.inventories, 'series', (pack) => pair(pack.symbol, pack.session));
   const counts = { expectedCloses: closeDates.length * protocol.symbols.length, validCloses: 0,
-    expectedPairs: signals.length * protocol.symbols.length, verifiedPairs: 0, knownAdjustmentLegs: 0 };
+    expectedPairs: signals.length * protocol.symbols.length, verifiedPairs: 0, staleRevalidationPanels: 0, knownAdjustmentLegs: 0 };
   const panelDigests = [
     ...dataset.candles.map((item) => ({ scope: `candles:${item.provenance.requestedSymbol}`, digest: canonicalSha256(item) })),
     ...dataset.corporateActions.map((item) => ({ scope: `actions:${item.provenance.requestedSymbol}`, digest: canonicalSha256(item) })),
     ...dataset.signalChains.map((item) => ({ scope: `signal:${byRequestedDate(item)}`, digest: canonicalSha256(item) })),
-    ...dataset.preCloseSnapshots.map((item) => ({ scope: `preclose:${byRequestedDate(item)}`, digest: canonicalSha256(item) })),
+    ...dataset.revalidationChains.map((item) => ({ scope: `revalidation:${byRequestedDate(item)}`, digest: canonicalSha256(item) })),
     ...dataset.fillChains.map((item) => ({ scope: `fill:${byRequestedDate(item)}`, digest: canonicalSha256(item) })),
     ...dataset.inventories.map((item) => ({ scope: `inventory:${pair(item.symbol, item.session)}`, digest: canonicalSha256(item) })),
   ].sort((a, b) => `${a.scope}:${a.digest}`.localeCompare(`${b.scope}:${b.digest}`, 'en-US'));
@@ -232,35 +232,44 @@ export function validatePhase3Dataset(input: Phase3GateInput) {
     }
 
     for (const schedule of signals) {
-      const { signalDate, signalAt, entryDate, revalidationObservedAt, orderAt, fillAt } = schedule;
+      const { signalDate, signalAt, revalidationDate, revalidationObservedAt, entryDate, orderAt, fillAt } = schedule;
+      const signalClose = optionTradingCutoff(signalDate)!;
+      const revalidationClose = instant(revalidationObservedAt);
+      const orderTime = instant(orderAt);
+      const fillTime = instant(fillAt);
       const signalKey = pair(symbol, signalDate);
       const entryKey = pair(symbol, entryDate);
       const signal = signalByPair.get(signalKey);
-      const preclose = precloseByPair.get(entryKey);
+      const revalidation = revalidationByPair.get(pair(symbol, revalidationDate));
       const fill = fillByPair.get(entryKey);
       const foundInventory = seriesInventorySchema.safeParse(inventories.get(signalKey));
       const before = issueCount;
       const spot = closes.get(Date.parse(signalDate));
+      if (!(signalClose < instant(signalAt) && instant(signalAt) < revalidationClose && revalidationClose < orderTime && orderTime < fillTime)) {
+        fail('phase_clock', signalKey, 'The D+2 fill must follow D selection, D+1 observations, and the locked order.');
+      }
       if (candles && review && closes.size === closeDates.length) {
-        for (const asOf of [signalAt, orderAt]) {
+        for (const [asOf, expectedClose] of [[signalAt, signalDate], [orderAt, revalidationDate]]) {
           try {
             const now = new Date(asOf);
             const history = buildPhase2History(candles, review, now);
             const check = prepareReturnHistory(history, symbol, now);
             if (check.status !== 'ok') fail('history_unavailable', signalKey, check.reason);
+            else if (check.history.lastSession !== expectedClose) {
+              fail('history_unavailable', signalKey, `Point-in-time history must end at ${expectedClose}.`);
+            }
           } catch (error) {
             fail('history_unavailable', signalKey, error instanceof Error ? error.message : 'Price basis could not be validated.');
           }
         }
       } else fail('history_unavailable', signalKey, 'Required close or corporate-action coverage is incomplete.');
-      if (!signal || !preclose || !fill || signal.kind !== 'chain' || preclose.kind !== 'intraday' || fill.kind !== 'chain'
-        || spot === undefined || !foundInventory.success) {
-        fail('pair_incomplete', signalKey, 'Signal, pre-close, fill, spot, and certified series inventory must all be present.');
+      if (!signal || !revalidation || !fill || signal.kind !== 'chain' || revalidation.kind !== 'chain' || fill.kind !== 'chain'
+        || spot === undefined || !closes.has(Date.parse(revalidationDate)) || !foundInventory.success) {
+        fail('pair_incomplete', signalKey, 'Signal, revalidation, fill, D and D+1 closes, and certified series inventory must all be present.');
         continue;
       }
       const inventory = foundInventory.data;
       artifact('series', signalKey, inventory.provenance, signalDate, signalDate);
-      const signalClose = optionTradingCutoff(signalDate)!;
       if (!recordTime(inventory.observedAt, inventory.availableAt, inventory.provenance.actualRetrievedAt, signalClose, instant(signalAt))) {
         fail('series_clock', signalKey, 'Certified inventory must describe listings at the signal date and be available before selection.');
       }
@@ -268,21 +277,26 @@ export function validatePhase3Dataset(input: Phase3GateInput) {
       for (const row of inventory.rows) {
         if (!inScope(row, spot, schedule) || !goodContract(row, symbol) || expectedIds.has(row.optionSymbol)) {
           fail('series_invalid', signalKey, 'Certified series must be unique, standard, and in the frozen price and expiration band.');
-        } else expectedIds.add(row.optionSymbol);
-      }
-      const observedSpot = instant(revalidationObservedAt);
-      if (preclose.spot.symbol !== symbol || preclose.spot.session !== entryDate || preclose.spot.availability.kind !== 'observed'
-        || preclose.spot.observationKind !== 'provider' || preclose.spot.basis !== 'as-traded-non-dividend-adjusted'
-        || !Number.isFinite(preclose.spot.price) || preclose.spot.price <= 0
-        || !recordTime(preclose.spot.observedAt, preclose.spot.availability.at, preclose.provenance.actualRetrievedAt, observedSpot, instant(orderAt))) {
-        fail('preclose_spot_invalid', entryKey, 'The actual pre-close spot and its point-in-time availability are required.');
+          continue;
+        }
+        expectedIds.add(row.optionSymbol);
+        const expirationCutoff = optionTradingCutoff(row.expiration)!;
+        if (expirationCutoff <= fillTime) {
+          fail('series_expired_at_fill', signalKey, `Series is no longer open at the simulated fill: ${row.optionSymbol}.`);
+        }
+        if (row.expiration > protocol.cutoffDate || !closes.has(Date.parse(row.expiration))
+          || expirationCutoff + protocol.timeline.stockAvailabilityLagMinutes * minute > instant(protocol.cutoffAt)) {
+          fail('settlement_missing', signalKey, `No complete expiration settlement reference for ${row.optionSymbol}.`);
+        }
       }
 
       for (const stage of [
-        { role: 'signal', pack: signal, session: signalDate, clock: signalClose, available: instant(signalAt), reconstructed: studyMorning(entryDate, 31) },
-        { role: 'preclose', pack: preclose, session: entryDate, clock: observedSpot, available: instant(orderAt), reconstructed: null },
-        { role: 'fill', pack: fill, session: entryDate, clock: instant(fillAt),
-          available: instant(protocol.cutoffAt), reconstructed: studyMorning(nextStudySession(entryDate), 31) },
+        { role: 'signal', pack: signal, session: signalDate, clock: signalClose,
+          available: instant(signalAt), reconstructed: marketDataChainAvailability(signalDate) },
+        { role: 'revalidation', pack: revalidation, session: revalidationDate, clock: revalidationClose,
+          available: orderTime, reconstructed: marketDataChainAvailability(revalidationDate) },
+        { role: 'fill', pack: fill, session: entryDate, clock: fillTime,
+          available: instant(protocol.cutoffAt), reconstructed: marketDataChainAvailability(entryDate) },
       ] as const) {
         const { role, pack, session, clock, available, reconstructed } = stage;
         const scope = `${role}:${signalKey}`;
@@ -295,16 +309,11 @@ export function validatePhase3Dataset(input: Phase3GateInput) {
         const rows = index(relevant, scope, ({ optionSymbol }) => optionSymbol);
         for (const [id, row] of rows) {
           if (!expectedIds.has(id)) fail('series_mismatch', scope, `Option missing from certified signal inventory: ${id}.`);
-          const kind = reconstructed === null ? 'observed' : 'reconstructed';
-          const validAvailability = row.availability.kind === kind && row.availability.evidence.length > 0
-            && (reconstructed === null || instant(row.availability.at) === instant(reconstructed));
+          const validAvailability = row.availability.kind === 'reconstructed' && row.availability.evidence.length > 0
+            && instant(row.availability.at) === instant(reconstructed);
           if (!validAvailability || !recordTime(row.observedAt, row.availability.at, pack.provenance.actualRetrievedAt, clock, available)
             || !validQuote(row, symbol, session, available, role !== 'signal')) {
             fail('quote_invalid', scope, `Inconsistent quote, size, or timestamp for ${id}.`);
-          }
-          if (role === 'fill' && clock <= instant(orderAt)) fail('fill_leakage', scope, 'No order may use its later fill quote.');
-          if (row.expiration > protocol.cutoffDate || !closes.has(Date.parse(row.expiration))) {
-            fail('settlement_missing', scope, `No complete expiration settlement reference for ${id}.`);
           }
           if (role === 'signal' && review) {
             try {
@@ -327,11 +336,15 @@ export function validatePhase3Dataset(input: Phase3GateInput) {
           if (!rows.has(id) && !resolvedNoBook.has(id)) fail('quote_missing', scope, `No quote or evidenced no-book disposition for ${id}.`);
         }
       }
-      if (issueCount === before) counts.verifiedPairs++;
+      if (issueCount === before) {
+        counts.verifiedPairs++;
+        // A complete observation can still be too old for the common trading rule.
+        if (orderTime - revalidationClose > historicalQuoteAgeLimit) counts.staleRevalidationPanels++;
+      }
     }
   }
   if (candlesBySymbol.size !== protocol.symbols.length || reviewsBySymbol.size !== protocol.symbols.length
-    || [signalByPair, precloseByPair, fillByPair, inventories].some((map) => map.size !== counts.expectedPairs)) {
+    || [signalByPair, revalidationByPair, fillByPair, inventories].some((map) => map.size !== counts.expectedPairs)) {
     fail('panel_count', 'study', 'Panel scopes differ from the complete frozen universe and schedule.');
   }
   const datasetSha256 = canonicalSha256({ acquisitionClass: dataset.acquisitionClass, protocolCommit, requestManifestSha256,

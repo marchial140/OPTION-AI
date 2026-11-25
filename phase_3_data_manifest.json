@@ -1,6 +1,9 @@
 {
-  "protocolCommit": "2ff3fa43d72bbeb96bf7e60753ec9dcc3ce6c789",
-  "version": "phase-3-v1",
+  "originalProtocolCommit": "2ff3fa43d72bbeb96bf7e60753ec9dcc3ce6c789",
+  "protocolCommit": "1d946b027b97b325cf636eac7e446e6d52c5c294",
+  "version": "phase-3.1-eod-d-plus-2",
+  "timeline": "two-session-eod-locked-limit",
+  "scope": "study",
   "status": "planning_only",
   "symbols": [
     "SPY",
@@ -542,235 +545,261 @@
     {
       "signalDate": "2024-10-21",
       "signalAt": "2024-10-22T13:45:00.000Z",
-      "entryDate": "2024-10-22",
-      "revalidationObservedAt": "2024-10-22T19:15:00.000Z",
-      "orderAt": "2024-10-22T19:40:00.000Z",
-      "fillAt": "2024-10-22T20:00:00.000Z",
+      "revalidationDate": "2024-10-22",
+      "entryDate": "2024-10-23",
+      "revalidationObservedAt": "2024-10-22T20:00:00.000Z",
+      "orderAt": "2024-10-23T13:45:00.000Z",
+      "fillAt": "2024-10-23T20:00:00.000Z",
       "latestExpiryDate": "2024-11-20"
     },
     {
       "signalDate": "2024-11-04",
       "signalAt": "2024-11-05T14:45:00.000Z",
-      "entryDate": "2024-11-05",
-      "revalidationObservedAt": "2024-11-05T20:15:00.000Z",
-      "orderAt": "2024-11-05T20:40:00.000Z",
-      "fillAt": "2024-11-05T21:00:00.000Z",
+      "revalidationDate": "2024-11-05",
+      "entryDate": "2024-11-06",
+      "revalidationObservedAt": "2024-11-05T21:00:00.000Z",
+      "orderAt": "2024-11-06T14:45:00.000Z",
+      "fillAt": "2024-11-06T21:00:00.000Z",
       "latestExpiryDate": "2024-12-04"
     },
     {
       "signalDate": "2024-11-18",
       "signalAt": "2024-11-19T14:45:00.000Z",
-      "entryDate": "2024-11-19",
-      "revalidationObservedAt": "2024-11-19T20:15:00.000Z",
-      "orderAt": "2024-11-19T20:40:00.000Z",
-      "fillAt": "2024-11-19T21:00:00.000Z",
+      "revalidationDate": "2024-11-19",
+      "entryDate": "2024-11-20",
+      "revalidationObservedAt": "2024-11-19T21:00:00.000Z",
+      "orderAt": "2024-11-20T14:45:00.000Z",
+      "fillAt": "2024-11-20T21:00:00.000Z",
       "latestExpiryDate": "2024-12-18"
     },
     {
       "signalDate": "2024-12-02",
       "signalAt": "2024-12-03T14:45:00.000Z",
-      "entryDate": "2024-12-03",
-      "revalidationObservedAt": "2024-12-03T20:15:00.000Z",
-      "orderAt": "2024-12-03T20:40:00.000Z",
-      "fillAt": "2024-12-03T21:00:00.000Z",
+      "revalidationDate": "2024-12-03",
+      "entryDate": "2024-12-04",
+      "revalidationObservedAt": "2024-12-03T21:00:00.000Z",
+      "orderAt": "2024-12-04T14:45:00.000Z",
+      "fillAt": "2024-12-04T21:00:00.000Z",
       "latestExpiryDate": "2024-12-31"
     },
     {
       "signalDate": "2024-12-16",
       "signalAt": "2024-12-17T14:45:00.000Z",
-      "entryDate": "2024-12-17",
-      "revalidationObservedAt": "2024-12-17T20:15:00.000Z",
-      "orderAt": "2024-12-17T20:40:00.000Z",
-      "fillAt": "2024-12-17T21:00:00.000Z",
+      "revalidationDate": "2024-12-17",
+      "entryDate": "2024-12-18",
+      "revalidationObservedAt": "2024-12-17T21:00:00.000Z",
+      "orderAt": "2024-12-18T14:45:00.000Z",
+      "fillAt": "2024-12-18T21:00:00.000Z",
       "latestExpiryDate": "2025-01-15"
     },
     {
       "signalDate": "2024-12-30",
       "signalAt": "2024-12-31T14:45:00.000Z",
-      "entryDate": "2024-12-31",
-      "revalidationObservedAt": "2024-12-31T20:15:00.000Z",
-      "orderAt": "2024-12-31T20:40:00.000Z",
-      "fillAt": "2024-12-31T21:00:00.000Z",
+      "revalidationDate": "2024-12-31",
+      "entryDate": "2025-01-02",
+      "revalidationObservedAt": "2024-12-31T21:00:00.000Z",
+      "orderAt": "2025-01-02T14:45:00.000Z",
+      "fillAt": "2025-01-02T21:00:00.000Z",
       "latestExpiryDate": "2025-01-29"
     },
     {
       "signalDate": "2025-01-13",
       "signalAt": "2025-01-14T14:45:00.000Z",
-      "entryDate": "2025-01-14",
-      "revalidationObservedAt": "2025-01-14T20:15:00.000Z",
-      "orderAt": "2025-01-14T20:40:00.000Z",
-      "fillAt": "2025-01-14T21:00:00.000Z",
+      "revalidationDate": "2025-01-14",
+      "entryDate": "2025-01-15",
+      "revalidationObservedAt": "2025-01-14T21:00:00.000Z",
+      "orderAt": "2025-01-15T14:45:00.000Z",
+      "fillAt": "2025-01-15T21:00:00.000Z",
       "latestExpiryDate": "2025-02-12"
     },
     {
       "signalDate": "2025-01-27",
       "signalAt": "2025-01-28T14:45:00.000Z",
-      "entryDate": "2025-01-28",
-      "revalidationObservedAt": "2025-01-28T20:15:00.000Z",
-      "orderAt": "2025-01-28T20:40:00.000Z",
-      "fillAt": "2025-01-28T21:00:00.000Z",
+      "revalidationDate": "2025-01-28",
+      "entryDate": "2025-01-29",
+      "revalidationObservedAt": "2025-01-28T21:00:00.000Z",
+      "orderAt": "2025-01-29T14:45:00.000Z",
+      "fillAt": "2025-01-29T21:00:00.000Z",
       "latestExpiryDate": "2025-02-26"
     },
     {
       "signalDate": "2025-02-10",
       "signalAt": "2025-02-11T14:45:00.000Z",
-      "entryDate": "2025-02-11",
-      "revalidationObservedAt": "2025-02-11T20:15:00.000Z",
-      "orderAt": "2025-02-11T20:40:00.000Z",
-      "fillAt": "2025-02-11T21:00:00.000Z",
+      "revalidationDate": "2025-02-11",
+      "entryDate": "2025-02-12",
+      "revalidationObservedAt": "2025-02-11T21:00:00.000Z",
+      "orderAt": "2025-02-12T14:45:00.000Z",
+      "fillAt": "2025-02-12T21:00:00.000Z",
       "latestExpiryDate": "2025-03-12"
     },
     {
       "signalDate": "2025-02-24",
       "signalAt": "2025-02-25T14:45:00.000Z",
-      "entryDate": "2025-02-25",
-      "revalidationObservedAt": "2025-02-25T20:15:00.000Z",
-      "orderAt": "2025-02-25T20:40:00.000Z",
-      "fillAt": "2025-02-25T21:00:00.000Z",
+      "revalidationDate": "2025-02-25",
+      "entryDate": "2025-02-26",
+      "revalidationObservedAt": "2025-02-25T21:00:00.000Z",
+      "orderAt": "2025-02-26T14:45:00.000Z",
+      "fillAt": "2025-02-26T21:00:00.000Z",
       "latestExpiryDate": "2025-03-26"
     },
     {
       "signalDate": "2025-03-10",
       "signalAt": "2025-03-11T13:45:00.000Z",
-      "entryDate": "2025-03-11",
-      "revalidationObservedAt": "2025-03-11T19:15:00.000Z",
-      "orderAt": "2025-03-11T19:40:00.000Z",
-      "fillAt": "2025-03-11T20:00:00.000Z",
+      "revalidationDate": "2025-03-11",
+      "entryDate": "2025-03-12",
+      "revalidationObservedAt": "2025-03-11T20:00:00.000Z",
+      "orderAt": "2025-03-12T13:45:00.000Z",
+      "fillAt": "2025-03-12T20:00:00.000Z",
       "latestExpiryDate": "2025-04-09"
     },
     {
       "signalDate": "2025-03-24",
       "signalAt": "2025-03-25T13:45:00.000Z",
-      "entryDate": "2025-03-25",
-      "revalidationObservedAt": "2025-03-25T19:15:00.000Z",
-      "orderAt": "2025-03-25T19:40:00.000Z",
-      "fillAt": "2025-03-25T20:00:00.000Z",
+      "revalidationDate": "2025-03-25",
+      "entryDate": "2025-03-26",
+      "revalidationObservedAt": "2025-03-25T20:00:00.000Z",
+      "orderAt": "2025-03-26T13:45:00.000Z",
+      "fillAt": "2025-03-26T20:00:00.000Z",
       "latestExpiryDate": "2025-04-23"
     },
     {
       "signalDate": "2025-04-07",
       "signalAt": "2025-04-08T13:45:00.000Z",
-      "entryDate": "2025-04-08",
-      "revalidationObservedAt": "2025-04-08T19:15:00.000Z",
-      "orderAt": "2025-04-08T19:40:00.000Z",
-      "fillAt": "2025-04-08T20:00:00.000Z",
+      "revalidationDate": "2025-04-08",
+      "entryDate": "2025-04-09",
+      "revalidationObservedAt": "2025-04-08T20:00:00.000Z",
+      "orderAt": "2025-04-09T13:45:00.000Z",
+      "fillAt": "2025-04-09T20:00:00.000Z",
       "latestExpiryDate": "2025-05-07"
     },
     {
       "signalDate": "2025-04-21",
       "signalAt": "2025-04-22T13:45:00.000Z",
-      "entryDate": "2025-04-22",
-      "revalidationObservedAt": "2025-04-22T19:15:00.000Z",
-      "orderAt": "2025-04-22T19:40:00.000Z",
-      "fillAt": "2025-04-22T20:00:00.000Z",
+      "revalidationDate": "2025-04-22",
+      "entryDate": "2025-04-23",
+      "revalidationObservedAt": "2025-04-22T20:00:00.000Z",
+      "orderAt": "2025-04-23T13:45:00.000Z",
+      "fillAt": "2025-04-23T20:00:00.000Z",
       "latestExpiryDate": "2025-05-21"
     },
     {
       "signalDate": "2025-05-05",
       "signalAt": "2025-05-06T13:45:00.000Z",
-      "entryDate": "2025-05-06",
-      "revalidationObservedAt": "2025-05-06T19:15:00.000Z",
-      "orderAt": "2025-05-06T19:40:00.000Z",
-      "fillAt": "2025-05-06T20:00:00.000Z",
+      "revalidationDate": "2025-05-06",
+      "entryDate": "2025-05-07",
+      "revalidationObservedAt": "2025-05-06T20:00:00.000Z",
+      "orderAt": "2025-05-07T13:45:00.000Z",
+      "fillAt": "2025-05-07T20:00:00.000Z",
       "latestExpiryDate": "2025-06-04"
     },
     {
       "signalDate": "2025-05-19",
       "signalAt": "2025-05-20T13:45:00.000Z",
-      "entryDate": "2025-05-20",
-      "revalidationObservedAt": "2025-05-20T19:15:00.000Z",
-      "orderAt": "2025-05-20T19:40:00.000Z",
-      "fillAt": "2025-05-20T20:00:00.000Z",
+      "revalidationDate": "2025-05-20",
+      "entryDate": "2025-05-21",
+      "revalidationObservedAt": "2025-05-20T20:00:00.000Z",
+      "orderAt": "2025-05-21T13:45:00.000Z",
+      "fillAt": "2025-05-21T20:00:00.000Z",
       "latestExpiryDate": "2025-06-18"
     },
     {
       "signalDate": "2025-06-02",
       "signalAt": "2025-06-03T13:45:00.000Z",
-      "entryDate": "2025-06-03",
-      "revalidationObservedAt": "2025-06-03T19:15:00.000Z",
-      "orderAt": "2025-06-03T19:40:00.000Z",
-      "fillAt": "2025-06-03T20:00:00.000Z",
+      "revalidationDate": "2025-06-03",
+      "entryDate": "2025-06-04",
+      "revalidationObservedAt": "2025-06-03T20:00:00.000Z",
+      "orderAt": "2025-06-04T13:45:00.000Z",
+      "fillAt": "2025-06-04T20:00:00.000Z",
       "latestExpiryDate": "2025-07-02"
     },
     {
       "signalDate": "2025-06-16",
       "signalAt": "2025-06-17T13:45:00.000Z",
-      "entryDate": "2025-06-17",
-      "revalidationObservedAt": "2025-06-17T19:15:00.000Z",
-      "orderAt": "2025-06-17T19:40:00.000Z",
-      "fillAt": "2025-06-17T20:00:00.000Z",
+      "revalidationDate": "2025-06-17",
+      "entryDate": "2025-06-18",
+      "revalidationObservedAt": "2025-06-17T20:00:00.000Z",
+      "orderAt": "2025-06-18T13:45:00.000Z",
+      "fillAt": "2025-06-18T20:00:00.000Z",
       "latestExpiryDate": "2025-07-16"
     },
     {
       "signalDate": "2025-06-30",
       "signalAt": "2025-07-01T13:45:00.000Z",
-      "entryDate": "2025-07-01",
-      "revalidationObservedAt": "2025-07-01T19:15:00.000Z",
-      "orderAt": "2025-07-01T19:40:00.000Z",
-      "fillAt": "2025-07-01T20:00:00.000Z",
+      "revalidationDate": "2025-07-01",
+      "entryDate": "2025-07-02",
+      "revalidationObservedAt": "2025-07-01T20:00:00.000Z",
+      "orderAt": "2025-07-02T13:45:00.000Z",
+      "fillAt": "2025-07-02T20:00:00.000Z",
       "latestExpiryDate": "2025-07-30"
     },
     {
       "signalDate": "2025-07-14",
       "signalAt": "2025-07-15T13:45:00.000Z",
-      "entryDate": "2025-07-15",
-      "revalidationObservedAt": "2025-07-15T19:15:00.000Z",
-      "orderAt": "2025-07-15T19:40:00.000Z",
-      "fillAt": "2025-07-15T20:00:00.000Z",
+      "revalidationDate": "2025-07-15",
+      "entryDate": "2025-07-16",
+      "revalidationObservedAt": "2025-07-15T20:00:00.000Z",
+      "orderAt": "2025-07-16T13:45:00.000Z",
+      "fillAt": "2025-07-16T20:00:00.000Z",
       "latestExpiryDate": "2025-08-13"
     },
     {
       "signalDate": "2025-07-28",
       "signalAt": "2025-07-29T13:45:00.000Z",
-      "entryDate": "2025-07-29",
-      "revalidationObservedAt": "2025-07-29T19:15:00.000Z",
-      "orderAt": "2025-07-29T19:40:00.000Z",
-      "fillAt": "2025-07-29T20:00:00.000Z",
+      "revalidationDate": "2025-07-29",
+      "entryDate": "2025-07-30",
+      "revalidationObservedAt": "2025-07-29T20:00:00.000Z",
+      "orderAt": "2025-07-30T13:45:00.000Z",
+      "fillAt": "2025-07-30T20:00:00.000Z",
       "latestExpiryDate": "2025-08-27"
     },
     {
       "signalDate": "2025-08-11",
       "signalAt": "2025-08-12T13:45:00.000Z",
-      "entryDate": "2025-08-12",
-      "revalidationObservedAt": "2025-08-12T19:15:00.000Z",
-      "orderAt": "2025-08-12T19:40:00.000Z",
-      "fillAt": "2025-08-12T20:00:00.000Z",
+      "revalidationDate": "2025-08-12",
+      "entryDate": "2025-08-13",
+      "revalidationObservedAt": "2025-08-12T20:00:00.000Z",
+      "orderAt": "2025-08-13T13:45:00.000Z",
+      "fillAt": "2025-08-13T20:00:00.000Z",
       "latestExpiryDate": "2025-09-10"
     },
     {
       "signalDate": "2025-08-25",
       "signalAt": "2025-08-26T13:45:00.000Z",
-      "entryDate": "2025-08-26",
-      "revalidationObservedAt": "2025-08-26T19:15:00.000Z",
-      "orderAt": "2025-08-26T19:40:00.000Z",
-      "fillAt": "2025-08-26T20:00:00.000Z",
+      "revalidationDate": "2025-08-26",
+      "entryDate": "2025-08-27",
+      "revalidationObservedAt": "2025-08-26T20:00:00.000Z",
+      "orderAt": "2025-08-27T13:45:00.000Z",
+      "fillAt": "2025-08-27T20:00:00.000Z",
       "latestExpiryDate": "2025-09-24"
     },
     {
       "signalDate": "2025-09-08",
       "signalAt": "2025-09-09T13:45:00.000Z",
-      "entryDate": "2025-09-09",
-      "revalidationObservedAt": "2025-09-09T19:15:00.000Z",
-      "orderAt": "2025-09-09T19:40:00.000Z",
-      "fillAt": "2025-09-09T20:00:00.000Z",
+      "revalidationDate": "2025-09-09",
+      "entryDate": "2025-09-10",
+      "revalidationObservedAt": "2025-09-09T20:00:00.000Z",
+      "orderAt": "2025-09-10T13:45:00.000Z",
+      "fillAt": "2025-09-10T20:00:00.000Z",
       "latestExpiryDate": "2025-10-08"
     },
     {
       "signalDate": "2025-09-22",
       "signalAt": "2025-09-23T13:45:00.000Z",
-      "entryDate": "2025-09-23",
-      "revalidationObservedAt": "2025-09-23T19:15:00.000Z",
-      "orderAt": "2025-09-23T19:40:00.000Z",
-      "fillAt": "2025-09-23T20:00:00.000Z",
+      "revalidationDate": "2025-09-23",
+      "entryDate": "2025-09-24",
+      "revalidationObservedAt": "2025-09-23T20:00:00.000Z",
+      "orderAt": "2025-09-24T13:45:00.000Z",
+      "fillAt": "2025-09-24T20:00:00.000Z",
       "latestExpiryDate": "2025-10-22"
     },
     {
       "signalDate": "2025-10-06",
       "signalAt": "2025-10-07T13:45:00.000Z",
-      "entryDate": "2025-10-07",
-      "revalidationObservedAt": "2025-10-07T19:15:00.000Z",
-      "orderAt": "2025-10-07T19:40:00.000Z",
-      "fillAt": "2025-10-07T20:00:00.000Z",
+      "revalidationDate": "2025-10-07",
+      "entryDate": "2025-10-08",
+      "revalidationObservedAt": "2025-10-07T20:00:00.000Z",
+      "orderAt": "2025-10-08T13:45:00.000Z",
+      "fillAt": "2025-10-08T20:00:00.000Z",
       "latestExpiryDate": "2025-11-05"
     }
   ],
@@ -836,11 +865,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2024-10-21",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2024-10-21",
+      "date": "2024-10-22",
+      "from": "2024-10-28",
+      "to": "2024-11-20",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2024-10-21",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2024-10-21",
-      "date": "2024-10-22",
+      "date": "2024-10-23",
       "from": "2024-10-28",
       "to": "2024-11-20",
       "reservedCredits": 5
@@ -856,11 +895,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2024-11-04",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2024-11-04",
+      "date": "2024-11-05",
+      "from": "2024-11-11",
+      "to": "2024-12-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2024-11-04",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2024-11-04",
-      "date": "2024-11-05",
+      "date": "2024-11-06",
       "from": "2024-11-11",
       "to": "2024-12-04",
       "reservedCredits": 5
@@ -876,11 +925,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2024-11-18",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2024-11-18",
+      "date": "2024-11-19",
+      "from": "2024-11-25",
+      "to": "2024-12-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2024-11-18",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2024-11-18",
-      "date": "2024-11-19",
+      "date": "2024-11-20",
       "from": "2024-11-25",
       "to": "2024-12-18",
       "reservedCredits": 5
@@ -896,11 +955,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2024-12-02",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2024-12-02",
+      "date": "2024-12-03",
+      "from": "2024-12-09",
+      "to": "2025-01-01",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2024-12-02",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2024-12-02",
-      "date": "2024-12-03",
+      "date": "2024-12-04",
       "from": "2024-12-09",
       "to": "2025-01-01",
       "reservedCredits": 5
@@ -916,11 +985,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2024-12-16",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2024-12-16",
+      "date": "2024-12-17",
+      "from": "2024-12-23",
+      "to": "2025-01-15",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2024-12-16",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2024-12-16",
-      "date": "2024-12-17",
+      "date": "2024-12-18",
       "from": "2024-12-23",
       "to": "2025-01-15",
       "reservedCredits": 5
@@ -936,11 +1015,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2024-12-30",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2024-12-30",
+      "date": "2024-12-31",
+      "from": "2025-01-06",
+      "to": "2025-01-29",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2024-12-30",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2024-12-30",
-      "date": "2024-12-31",
+      "date": "2025-01-02",
       "from": "2025-01-06",
       "to": "2025-01-29",
       "reservedCredits": 5
@@ -956,11 +1045,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-01-13",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-01-13",
+      "date": "2025-01-14",
+      "from": "2025-01-20",
+      "to": "2025-02-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-01-13",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-01-13",
-      "date": "2025-01-14",
+      "date": "2025-01-15",
       "from": "2025-01-20",
       "to": "2025-02-12",
       "reservedCredits": 5
@@ -976,11 +1075,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-01-27",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-01-27",
+      "date": "2025-01-28",
+      "from": "2025-02-03",
+      "to": "2025-02-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-01-27",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-01-27",
-      "date": "2025-01-28",
+      "date": "2025-01-29",
       "from": "2025-02-03",
       "to": "2025-02-26",
       "reservedCredits": 5
@@ -996,11 +1105,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-02-10",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-02-10",
+      "date": "2025-02-11",
+      "from": "2025-02-17",
+      "to": "2025-03-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-02-10",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-02-10",
-      "date": "2025-02-11",
+      "date": "2025-02-12",
       "from": "2025-02-17",
       "to": "2025-03-12",
       "reservedCredits": 5
@@ -1016,11 +1135,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-02-24",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-02-24",
+      "date": "2025-02-25",
+      "from": "2025-03-03",
+      "to": "2025-03-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-02-24",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-02-24",
-      "date": "2025-02-25",
+      "date": "2025-02-26",
       "from": "2025-03-03",
       "to": "2025-03-26",
       "reservedCredits": 5
@@ -1036,11 +1165,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-03-10",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-03-10",
+      "date": "2025-03-11",
+      "from": "2025-03-17",
+      "to": "2025-04-09",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-03-10",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-03-10",
-      "date": "2025-03-11",
+      "date": "2025-03-12",
       "from": "2025-03-17",
       "to": "2025-04-09",
       "reservedCredits": 5
@@ -1056,11 +1195,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-03-24",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-03-24",
+      "date": "2025-03-25",
+      "from": "2025-03-31",
+      "to": "2025-04-23",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-03-24",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-03-24",
-      "date": "2025-03-25",
+      "date": "2025-03-26",
       "from": "2025-03-31",
       "to": "2025-04-23",
       "reservedCredits": 5
@@ -1076,11 +1225,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-04-07",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-04-07",
+      "date": "2025-04-08",
+      "from": "2025-04-14",
+      "to": "2025-05-07",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-04-07",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-04-07",
-      "date": "2025-04-08",
+      "date": "2025-04-09",
       "from": "2025-04-14",
       "to": "2025-05-07",
       "reservedCredits": 5
@@ -1096,11 +1255,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-04-21",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-04-21",
+      "date": "2025-04-22",
+      "from": "2025-04-28",
+      "to": "2025-05-21",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-04-21",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-04-21",
-      "date": "2025-04-22",
+      "date": "2025-04-23",
       "from": "2025-04-28",
       "to": "2025-05-21",
       "reservedCredits": 5
@@ -1116,11 +1285,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-05-05",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-05-05",
+      "date": "2025-05-06",
+      "from": "2025-05-12",
+      "to": "2025-06-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-05-05",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-05-05",
-      "date": "2025-05-06",
+      "date": "2025-05-07",
       "from": "2025-05-12",
       "to": "2025-06-04",
       "reservedCredits": 5
@@ -1136,11 +1315,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-05-19",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-05-19",
+      "date": "2025-05-20",
+      "from": "2025-05-26",
+      "to": "2025-06-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-05-19",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-05-19",
-      "date": "2025-05-20",
+      "date": "2025-05-21",
       "from": "2025-05-26",
       "to": "2025-06-18",
       "reservedCredits": 5
@@ -1156,11 +1345,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-06-02",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-06-02",
+      "date": "2025-06-03",
+      "from": "2025-06-09",
+      "to": "2025-07-02",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-06-02",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-06-02",
-      "date": "2025-06-03",
+      "date": "2025-06-04",
       "from": "2025-06-09",
       "to": "2025-07-02",
       "reservedCredits": 5
@@ -1176,11 +1375,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-06-16",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-06-16",
+      "date": "2025-06-17",
+      "from": "2025-06-23",
+      "to": "2025-07-16",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-06-16",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-06-16",
-      "date": "2025-06-17",
+      "date": "2025-06-18",
       "from": "2025-06-23",
       "to": "2025-07-16",
       "reservedCredits": 5
@@ -1196,11 +1405,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-06-30",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-06-30",
+      "date": "2025-07-01",
+      "from": "2025-07-07",
+      "to": "2025-07-30",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-06-30",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-06-30",
-      "date": "2025-07-01",
+      "date": "2025-07-02",
       "from": "2025-07-07",
       "to": "2025-07-30",
       "reservedCredits": 5
@@ -1216,11 +1435,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-07-14",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-07-14",
+      "date": "2025-07-15",
+      "from": "2025-07-21",
+      "to": "2025-08-13",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-07-14",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-07-14",
-      "date": "2025-07-15",
+      "date": "2025-07-16",
       "from": "2025-07-21",
       "to": "2025-08-13",
       "reservedCredits": 5
@@ -1236,11 +1465,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-07-28",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-07-28",
+      "date": "2025-07-29",
+      "from": "2025-08-04",
+      "to": "2025-08-27",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-07-28",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-07-28",
-      "date": "2025-07-29",
+      "date": "2025-07-30",
       "from": "2025-08-04",
       "to": "2025-08-27",
       "reservedCredits": 5
@@ -1256,11 +1495,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-08-11",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-08-11",
+      "date": "2025-08-12",
+      "from": "2025-08-18",
+      "to": "2025-09-10",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-08-11",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-08-11",
-      "date": "2025-08-12",
+      "date": "2025-08-13",
       "from": "2025-08-18",
       "to": "2025-09-10",
       "reservedCredits": 5
@@ -1276,11 +1525,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-08-25",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-08-25",
+      "date": "2025-08-26",
+      "from": "2025-09-01",
+      "to": "2025-09-24",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-08-25",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-08-25",
-      "date": "2025-08-26",
+      "date": "2025-08-27",
       "from": "2025-09-01",
       "to": "2025-09-24",
       "reservedCredits": 5
@@ -1296,11 +1555,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-09-08",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-09-08",
+      "date": "2025-09-09",
+      "from": "2025-09-15",
+      "to": "2025-10-08",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-09-08",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-09-08",
-      "date": "2025-09-09",
+      "date": "2025-09-10",
       "from": "2025-09-15",
       "to": "2025-10-08",
       "reservedCredits": 5
@@ -1316,11 +1585,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-09-22",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-09-22",
+      "date": "2025-09-23",
+      "from": "2025-09-29",
+      "to": "2025-10-22",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-09-22",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-09-22",
-      "date": "2025-09-23",
+      "date": "2025-09-24",
       "from": "2025-09-29",
       "to": "2025-10-22",
       "reservedCredits": 5
@@ -1336,11 +1615,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SPY-2025-10-06",
+      "symbol": "SPY",
+      "role": "revalidation",
+      "signalDate": "2025-10-06",
+      "date": "2025-10-07",
+      "from": "2025-10-13",
+      "to": "2025-11-05",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SPY-2025-10-06",
       "symbol": "SPY",
       "role": "fill",
       "signalDate": "2025-10-06",
-      "date": "2025-10-07",
+      "date": "2025-10-08",
       "from": "2025-10-13",
       "to": "2025-11-05",
       "reservedCredits": 5
@@ -1356,11 +1645,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2024-10-21",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2024-10-21",
+      "date": "2024-10-22",
+      "from": "2024-10-28",
+      "to": "2024-11-20",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2024-10-21",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2024-10-21",
-      "date": "2024-10-22",
+      "date": "2024-10-23",
       "from": "2024-10-28",
       "to": "2024-11-20",
       "reservedCredits": 5
@@ -1376,11 +1675,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2024-11-04",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2024-11-04",
+      "date": "2024-11-05",
+      "from": "2024-11-11",
+      "to": "2024-12-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2024-11-04",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2024-11-04",
-      "date": "2024-11-05",
+      "date": "2024-11-06",
       "from": "2024-11-11",
       "to": "2024-12-04",
       "reservedCredits": 5
@@ -1396,11 +1705,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2024-11-18",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2024-11-18",
+      "date": "2024-11-19",
+      "from": "2024-11-25",
+      "to": "2024-12-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2024-11-18",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2024-11-18",
-      "date": "2024-11-19",
+      "date": "2024-11-20",
       "from": "2024-11-25",
       "to": "2024-12-18",
       "reservedCredits": 5
@@ -1416,11 +1735,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2024-12-02",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2024-12-02",
+      "date": "2024-12-03",
+      "from": "2024-12-09",
+      "to": "2025-01-01",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2024-12-02",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2024-12-02",
-      "date": "2024-12-03",
+      "date": "2024-12-04",
       "from": "2024-12-09",
       "to": "2025-01-01",
       "reservedCredits": 5
@@ -1436,11 +1765,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2024-12-16",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2024-12-16",
+      "date": "2024-12-17",
+      "from": "2024-12-23",
+      "to": "2025-01-15",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2024-12-16",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2024-12-16",
-      "date": "2024-12-17",
+      "date": "2024-12-18",
       "from": "2024-12-23",
       "to": "2025-01-15",
       "reservedCredits": 5
@@ -1456,11 +1795,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2024-12-30",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2024-12-30",
+      "date": "2024-12-31",
+      "from": "2025-01-06",
+      "to": "2025-01-29",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2024-12-30",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2024-12-30",
-      "date": "2024-12-31",
+      "date": "2025-01-02",
       "from": "2025-01-06",
       "to": "2025-01-29",
       "reservedCredits": 5
@@ -1476,11 +1825,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-01-13",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-01-13",
+      "date": "2025-01-14",
+      "from": "2025-01-20",
+      "to": "2025-02-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-01-13",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-01-13",
-      "date": "2025-01-14",
+      "date": "2025-01-15",
       "from": "2025-01-20",
       "to": "2025-02-12",
       "reservedCredits": 5
@@ -1496,11 +1855,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-01-27",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-01-27",
+      "date": "2025-01-28",
+      "from": "2025-02-03",
+      "to": "2025-02-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-01-27",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-01-27",
-      "date": "2025-01-28",
+      "date": "2025-01-29",
       "from": "2025-02-03",
       "to": "2025-02-26",
       "reservedCredits": 5
@@ -1516,11 +1885,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-02-10",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-02-10",
+      "date": "2025-02-11",
+      "from": "2025-02-17",
+      "to": "2025-03-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-02-10",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-02-10",
-      "date": "2025-02-11",
+      "date": "2025-02-12",
       "from": "2025-02-17",
       "to": "2025-03-12",
       "reservedCredits": 5
@@ -1536,11 +1915,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-02-24",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-02-24",
+      "date": "2025-02-25",
+      "from": "2025-03-03",
+      "to": "2025-03-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-02-24",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-02-24",
-      "date": "2025-02-25",
+      "date": "2025-02-26",
       "from": "2025-03-03",
       "to": "2025-03-26",
       "reservedCredits": 5
@@ -1556,11 +1945,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-03-10",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-03-10",
+      "date": "2025-03-11",
+      "from": "2025-03-17",
+      "to": "2025-04-09",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-03-10",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-03-10",
-      "date": "2025-03-11",
+      "date": "2025-03-12",
       "from": "2025-03-17",
       "to": "2025-04-09",
       "reservedCredits": 5
@@ -1576,11 +1975,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-03-24",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-03-24",
+      "date": "2025-03-25",
+      "from": "2025-03-31",
+      "to": "2025-04-23",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-03-24",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-03-24",
-      "date": "2025-03-25",
+      "date": "2025-03-26",
       "from": "2025-03-31",
       "to": "2025-04-23",
       "reservedCredits": 5
@@ -1596,11 +2005,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-04-07",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-04-07",
+      "date": "2025-04-08",
+      "from": "2025-04-14",
+      "to": "2025-05-07",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-04-07",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-04-07",
-      "date": "2025-04-08",
+      "date": "2025-04-09",
       "from": "2025-04-14",
       "to": "2025-05-07",
       "reservedCredits": 5
@@ -1616,11 +2035,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-04-21",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-04-21",
+      "date": "2025-04-22",
+      "from": "2025-04-28",
+      "to": "2025-05-21",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-04-21",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-04-21",
-      "date": "2025-04-22",
+      "date": "2025-04-23",
       "from": "2025-04-28",
       "to": "2025-05-21",
       "reservedCredits": 5
@@ -1636,11 +2065,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-05-05",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-05-05",
+      "date": "2025-05-06",
+      "from": "2025-05-12",
+      "to": "2025-06-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-05-05",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-05-05",
-      "date": "2025-05-06",
+      "date": "2025-05-07",
       "from": "2025-05-12",
       "to": "2025-06-04",
       "reservedCredits": 5
@@ -1656,11 +2095,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-05-19",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-05-19",
+      "date": "2025-05-20",
+      "from": "2025-05-26",
+      "to": "2025-06-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-05-19",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-05-19",
-      "date": "2025-05-20",
+      "date": "2025-05-21",
       "from": "2025-05-26",
       "to": "2025-06-18",
       "reservedCredits": 5
@@ -1676,11 +2125,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-06-02",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-06-02",
+      "date": "2025-06-03",
+      "from": "2025-06-09",
+      "to": "2025-07-02",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-06-02",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-06-02",
-      "date": "2025-06-03",
+      "date": "2025-06-04",
       "from": "2025-06-09",
       "to": "2025-07-02",
       "reservedCredits": 5
@@ -1696,11 +2155,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-06-16",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-06-16",
+      "date": "2025-06-17",
+      "from": "2025-06-23",
+      "to": "2025-07-16",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-06-16",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-06-16",
-      "date": "2025-06-17",
+      "date": "2025-06-18",
       "from": "2025-06-23",
       "to": "2025-07-16",
       "reservedCredits": 5
@@ -1716,11 +2185,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-06-30",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-06-30",
+      "date": "2025-07-01",
+      "from": "2025-07-07",
+      "to": "2025-07-30",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-06-30",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-06-30",
-      "date": "2025-07-01",
+      "date": "2025-07-02",
       "from": "2025-07-07",
       "to": "2025-07-30",
       "reservedCredits": 5
@@ -1736,11 +2215,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-07-14",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-07-14",
+      "date": "2025-07-15",
+      "from": "2025-07-21",
+      "to": "2025-08-13",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-07-14",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-07-14",
-      "date": "2025-07-15",
+      "date": "2025-07-16",
       "from": "2025-07-21",
       "to": "2025-08-13",
       "reservedCredits": 5
@@ -1756,11 +2245,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-07-28",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-07-28",
+      "date": "2025-07-29",
+      "from": "2025-08-04",
+      "to": "2025-08-27",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-07-28",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-07-28",
-      "date": "2025-07-29",
+      "date": "2025-07-30",
       "from": "2025-08-04",
       "to": "2025-08-27",
       "reservedCredits": 5
@@ -1776,11 +2275,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-08-11",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-08-11",
+      "date": "2025-08-12",
+      "from": "2025-08-18",
+      "to": "2025-09-10",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-08-11",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-08-11",
-      "date": "2025-08-12",
+      "date": "2025-08-13",
       "from": "2025-08-18",
       "to": "2025-09-10",
       "reservedCredits": 5
@@ -1796,11 +2305,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-08-25",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-08-25",
+      "date": "2025-08-26",
+      "from": "2025-09-01",
+      "to": "2025-09-24",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-08-25",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-08-25",
-      "date": "2025-08-26",
+      "date": "2025-08-27",
       "from": "2025-09-01",
       "to": "2025-09-24",
       "reservedCredits": 5
@@ -1816,11 +2335,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-09-08",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-09-08",
+      "date": "2025-09-09",
+      "from": "2025-09-15",
+      "to": "2025-10-08",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-09-08",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-09-08",
-      "date": "2025-09-09",
+      "date": "2025-09-10",
       "from": "2025-09-15",
       "to": "2025-10-08",
       "reservedCredits": 5
@@ -1836,11 +2365,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-09-22",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-09-22",
+      "date": "2025-09-23",
+      "from": "2025-09-29",
+      "to": "2025-10-22",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-09-22",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-09-22",
-      "date": "2025-09-23",
+      "date": "2025-09-24",
       "from": "2025-09-29",
       "to": "2025-10-22",
       "reservedCredits": 5
@@ -1856,11 +2395,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-QQQ-2025-10-06",
+      "symbol": "QQQ",
+      "role": "revalidation",
+      "signalDate": "2025-10-06",
+      "date": "2025-10-07",
+      "from": "2025-10-13",
+      "to": "2025-11-05",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-QQQ-2025-10-06",
       "symbol": "QQQ",
       "role": "fill",
       "signalDate": "2025-10-06",
-      "date": "2025-10-07",
+      "date": "2025-10-08",
       "from": "2025-10-13",
       "to": "2025-11-05",
       "reservedCredits": 5
@@ -1876,11 +2425,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2024-10-21",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2024-10-21",
+      "date": "2024-10-22",
+      "from": "2024-10-28",
+      "to": "2024-11-20",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2024-10-21",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2024-10-21",
-      "date": "2024-10-22",
+      "date": "2024-10-23",
       "from": "2024-10-28",
       "to": "2024-11-20",
       "reservedCredits": 5
@@ -1896,11 +2455,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2024-11-04",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2024-11-04",
+      "date": "2024-11-05",
+      "from": "2024-11-11",
+      "to": "2024-12-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2024-11-04",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2024-11-04",
-      "date": "2024-11-05",
+      "date": "2024-11-06",
       "from": "2024-11-11",
       "to": "2024-12-04",
       "reservedCredits": 5
@@ -1916,11 +2485,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2024-11-18",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2024-11-18",
+      "date": "2024-11-19",
+      "from": "2024-11-25",
+      "to": "2024-12-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2024-11-18",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2024-11-18",
-      "date": "2024-11-19",
+      "date": "2024-11-20",
       "from": "2024-11-25",
       "to": "2024-12-18",
       "reservedCredits": 5
@@ -1936,11 +2515,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2024-12-02",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2024-12-02",
+      "date": "2024-12-03",
+      "from": "2024-12-09",
+      "to": "2025-01-01",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2024-12-02",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2024-12-02",
-      "date": "2024-12-03",
+      "date": "2024-12-04",
       "from": "2024-12-09",
       "to": "2025-01-01",
       "reservedCredits": 5
@@ -1956,11 +2545,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2024-12-16",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2024-12-16",
+      "date": "2024-12-17",
+      "from": "2024-12-23",
+      "to": "2025-01-15",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2024-12-16",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2024-12-16",
-      "date": "2024-12-17",
+      "date": "2024-12-18",
       "from": "2024-12-23",
       "to": "2025-01-15",
       "reservedCredits": 5
@@ -1976,11 +2575,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2024-12-30",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2024-12-30",
+      "date": "2024-12-31",
+      "from": "2025-01-06",
+      "to": "2025-01-29",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2024-12-30",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2024-12-30",
-      "date": "2024-12-31",
+      "date": "2025-01-02",
       "from": "2025-01-06",
       "to": "2025-01-29",
       "reservedCredits": 5
@@ -1996,11 +2605,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-01-13",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-01-13",
+      "date": "2025-01-14",
+      "from": "2025-01-20",
+      "to": "2025-02-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-01-13",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-01-13",
-      "date": "2025-01-14",
+      "date": "2025-01-15",
       "from": "2025-01-20",
       "to": "2025-02-12",
       "reservedCredits": 5
@@ -2016,11 +2635,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-01-27",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-01-27",
+      "date": "2025-01-28",
+      "from": "2025-02-03",
+      "to": "2025-02-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-01-27",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-01-27",
-      "date": "2025-01-28",
+      "date": "2025-01-29",
       "from": "2025-02-03",
       "to": "2025-02-26",
       "reservedCredits": 5
@@ -2036,11 +2665,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-02-10",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-02-10",
+      "date": "2025-02-11",
+      "from": "2025-02-17",
+      "to": "2025-03-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-02-10",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-02-10",
-      "date": "2025-02-11",
+      "date": "2025-02-12",
       "from": "2025-02-17",
       "to": "2025-03-12",
       "reservedCredits": 5
@@ -2056,11 +2695,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-02-24",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-02-24",
+      "date": "2025-02-25",
+      "from": "2025-03-03",
+      "to": "2025-03-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-02-24",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-02-24",
-      "date": "2025-02-25",
+      "date": "2025-02-26",
       "from": "2025-03-03",
       "to": "2025-03-26",
       "reservedCredits": 5
@@ -2076,11 +2725,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-03-10",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-03-10",
+      "date": "2025-03-11",
+      "from": "2025-03-17",
+      "to": "2025-04-09",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-03-10",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-03-10",
-      "date": "2025-03-11",
+      "date": "2025-03-12",
       "from": "2025-03-17",
       "to": "2025-04-09",
       "reservedCredits": 5
@@ -2096,11 +2755,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-03-24",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-03-24",
+      "date": "2025-03-25",
+      "from": "2025-03-31",
+      "to": "2025-04-23",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-03-24",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-03-24",
-      "date": "2025-03-25",
+      "date": "2025-03-26",
       "from": "2025-03-31",
       "to": "2025-04-23",
       "reservedCredits": 5
@@ -2116,11 +2785,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-04-07",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-04-07",
+      "date": "2025-04-08",
+      "from": "2025-04-14",
+      "to": "2025-05-07",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-04-07",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-04-07",
-      "date": "2025-04-08",
+      "date": "2025-04-09",
       "from": "2025-04-14",
       "to": "2025-05-07",
       "reservedCredits": 5
@@ -2136,11 +2815,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-04-21",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-04-21",
+      "date": "2025-04-22",
+      "from": "2025-04-28",
+      "to": "2025-05-21",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-04-21",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-04-21",
-      "date": "2025-04-22",
+      "date": "2025-04-23",
       "from": "2025-04-28",
       "to": "2025-05-21",
       "reservedCredits": 5
@@ -2156,11 +2845,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-05-05",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-05-05",
+      "date": "2025-05-06",
+      "from": "2025-05-12",
+      "to": "2025-06-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-05-05",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-05-05",
-      "date": "2025-05-06",
+      "date": "2025-05-07",
       "from": "2025-05-12",
       "to": "2025-06-04",
       "reservedCredits": 5
@@ -2176,11 +2875,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-05-19",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-05-19",
+      "date": "2025-05-20",
+      "from": "2025-05-26",
+      "to": "2025-06-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-05-19",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-05-19",
-      "date": "2025-05-20",
+      "date": "2025-05-21",
       "from": "2025-05-26",
       "to": "2025-06-18",
       "reservedCredits": 5
@@ -2196,11 +2905,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-06-02",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-06-02",
+      "date": "2025-06-03",
+      "from": "2025-06-09",
+      "to": "2025-07-02",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-06-02",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-06-02",
-      "date": "2025-06-03",
+      "date": "2025-06-04",
       "from": "2025-06-09",
       "to": "2025-07-02",
       "reservedCredits": 5
@@ -2216,11 +2935,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-06-16",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-06-16",
+      "date": "2025-06-17",
+      "from": "2025-06-23",
+      "to": "2025-07-16",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-06-16",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-06-16",
-      "date": "2025-06-17",
+      "date": "2025-06-18",
       "from": "2025-06-23",
       "to": "2025-07-16",
       "reservedCredits": 5
@@ -2236,11 +2965,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-06-30",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-06-30",
+      "date": "2025-07-01",
+      "from": "2025-07-07",
+      "to": "2025-07-30",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-06-30",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-06-30",
-      "date": "2025-07-01",
+      "date": "2025-07-02",
       "from": "2025-07-07",
       "to": "2025-07-30",
       "reservedCredits": 5
@@ -2256,11 +2995,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-07-14",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-07-14",
+      "date": "2025-07-15",
+      "from": "2025-07-21",
+      "to": "2025-08-13",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-07-14",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-07-14",
-      "date": "2025-07-15",
+      "date": "2025-07-16",
       "from": "2025-07-21",
       "to": "2025-08-13",
       "reservedCredits": 5
@@ -2276,11 +3025,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-07-28",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-07-28",
+      "date": "2025-07-29",
+      "from": "2025-08-04",
+      "to": "2025-08-27",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-07-28",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-07-28",
-      "date": "2025-07-29",
+      "date": "2025-07-30",
       "from": "2025-08-04",
       "to": "2025-08-27",
       "reservedCredits": 5
@@ -2296,11 +3055,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-08-11",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-08-11",
+      "date": "2025-08-12",
+      "from": "2025-08-18",
+      "to": "2025-09-10",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-08-11",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-08-11",
-      "date": "2025-08-12",
+      "date": "2025-08-13",
       "from": "2025-08-18",
       "to": "2025-09-10",
       "reservedCredits": 5
@@ -2316,11 +3085,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-08-25",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-08-25",
+      "date": "2025-08-26",
+      "from": "2025-09-01",
+      "to": "2025-09-24",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-08-25",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-08-25",
-      "date": "2025-08-26",
+      "date": "2025-08-27",
       "from": "2025-09-01",
       "to": "2025-09-24",
       "reservedCredits": 5
@@ -2336,11 +3115,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-09-08",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-09-08",
+      "date": "2025-09-09",
+      "from": "2025-09-15",
+      "to": "2025-10-08",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-09-08",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-09-08",
-      "date": "2025-09-09",
+      "date": "2025-09-10",
       "from": "2025-09-15",
       "to": "2025-10-08",
       "reservedCredits": 5
@@ -2356,11 +3145,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-09-22",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-09-22",
+      "date": "2025-09-23",
+      "from": "2025-09-29",
+      "to": "2025-10-22",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-09-22",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-09-22",
-      "date": "2025-09-23",
+      "date": "2025-09-24",
       "from": "2025-09-29",
       "to": "2025-10-22",
       "reservedCredits": 5
@@ -2376,11 +3175,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-MSFT-2025-10-06",
+      "symbol": "MSFT",
+      "role": "revalidation",
+      "signalDate": "2025-10-06",
+      "date": "2025-10-07",
+      "from": "2025-10-13",
+      "to": "2025-11-05",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-MSFT-2025-10-06",
       "symbol": "MSFT",
       "role": "fill",
       "signalDate": "2025-10-06",
-      "date": "2025-10-07",
+      "date": "2025-10-08",
       "from": "2025-10-13",
       "to": "2025-11-05",
       "reservedCredits": 5
@@ -2396,11 +3205,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2024-10-21",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2024-10-21",
+      "date": "2024-10-22",
+      "from": "2024-10-28",
+      "to": "2024-11-20",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2024-10-21",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2024-10-21",
-      "date": "2024-10-22",
+      "date": "2024-10-23",
       "from": "2024-10-28",
       "to": "2024-11-20",
       "reservedCredits": 5
@@ -2416,11 +3235,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2024-11-04",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2024-11-04",
+      "date": "2024-11-05",
+      "from": "2024-11-11",
+      "to": "2024-12-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2024-11-04",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2024-11-04",
-      "date": "2024-11-05",
+      "date": "2024-11-06",
       "from": "2024-11-11",
       "to": "2024-12-04",
       "reservedCredits": 5
@@ -2436,11 +3265,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2024-11-18",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2024-11-18",
+      "date": "2024-11-19",
+      "from": "2024-11-25",
+      "to": "2024-12-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2024-11-18",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2024-11-18",
-      "date": "2024-11-19",
+      "date": "2024-11-20",
       "from": "2024-11-25",
       "to": "2024-12-18",
       "reservedCredits": 5
@@ -2456,11 +3295,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2024-12-02",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2024-12-02",
+      "date": "2024-12-03",
+      "from": "2024-12-09",
+      "to": "2025-01-01",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2024-12-02",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2024-12-02",
-      "date": "2024-12-03",
+      "date": "2024-12-04",
       "from": "2024-12-09",
       "to": "2025-01-01",
       "reservedCredits": 5
@@ -2476,11 +3325,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2024-12-16",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2024-12-16",
+      "date": "2024-12-17",
+      "from": "2024-12-23",
+      "to": "2025-01-15",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2024-12-16",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2024-12-16",
-      "date": "2024-12-17",
+      "date": "2024-12-18",
       "from": "2024-12-23",
       "to": "2025-01-15",
       "reservedCredits": 5
@@ -2496,11 +3355,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2024-12-30",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2024-12-30",
+      "date": "2024-12-31",
+      "from": "2025-01-06",
+      "to": "2025-01-29",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2024-12-30",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2024-12-30",
-      "date": "2024-12-31",
+      "date": "2025-01-02",
       "from": "2025-01-06",
       "to": "2025-01-29",
       "reservedCredits": 5
@@ -2516,11 +3385,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-01-13",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-01-13",
+      "date": "2025-01-14",
+      "from": "2025-01-20",
+      "to": "2025-02-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-01-13",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-01-13",
-      "date": "2025-01-14",
+      "date": "2025-01-15",
       "from": "2025-01-20",
       "to": "2025-02-12",
       "reservedCredits": 5
@@ -2536,11 +3415,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-01-27",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-01-27",
+      "date": "2025-01-28",
+      "from": "2025-02-03",
+      "to": "2025-02-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-01-27",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-01-27",
-      "date": "2025-01-28",
+      "date": "2025-01-29",
       "from": "2025-02-03",
       "to": "2025-02-26",
       "reservedCredits": 5
@@ -2556,11 +3445,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-02-10",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-02-10",
+      "date": "2025-02-11",
+      "from": "2025-02-17",
+      "to": "2025-03-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-02-10",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-02-10",
-      "date": "2025-02-11",
+      "date": "2025-02-12",
       "from": "2025-02-17",
       "to": "2025-03-12",
       "reservedCredits": 5
@@ -2576,11 +3475,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-02-24",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-02-24",
+      "date": "2025-02-25",
+      "from": "2025-03-03",
+      "to": "2025-03-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-02-24",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-02-24",
-      "date": "2025-02-25",
+      "date": "2025-02-26",
       "from": "2025-03-03",
       "to": "2025-03-26",
       "reservedCredits": 5
@@ -2596,11 +3505,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-03-10",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-03-10",
+      "date": "2025-03-11",
+      "from": "2025-03-17",
+      "to": "2025-04-09",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-03-10",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-03-10",
-      "date": "2025-03-11",
+      "date": "2025-03-12",
       "from": "2025-03-17",
       "to": "2025-04-09",
       "reservedCredits": 5
@@ -2616,11 +3535,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-03-24",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-03-24",
+      "date": "2025-03-25",
+      "from": "2025-03-31",
+      "to": "2025-04-23",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-03-24",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-03-24",
-      "date": "2025-03-25",
+      "date": "2025-03-26",
       "from": "2025-03-31",
       "to": "2025-04-23",
       "reservedCredits": 5
@@ -2636,11 +3565,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-04-07",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-04-07",
+      "date": "2025-04-08",
+      "from": "2025-04-14",
+      "to": "2025-05-07",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-04-07",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-04-07",
-      "date": "2025-04-08",
+      "date": "2025-04-09",
       "from": "2025-04-14",
       "to": "2025-05-07",
       "reservedCredits": 5
@@ -2656,11 +3595,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-04-21",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-04-21",
+      "date": "2025-04-22",
+      "from": "2025-04-28",
+      "to": "2025-05-21",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-04-21",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-04-21",
-      "date": "2025-04-22",
+      "date": "2025-04-23",
       "from": "2025-04-28",
       "to": "2025-05-21",
       "reservedCredits": 5
@@ -2676,11 +3625,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-05-05",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-05-05",
+      "date": "2025-05-06",
+      "from": "2025-05-12",
+      "to": "2025-06-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-05-05",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-05-05",
-      "date": "2025-05-06",
+      "date": "2025-05-07",
       "from": "2025-05-12",
       "to": "2025-06-04",
       "reservedCredits": 5
@@ -2696,11 +3655,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-05-19",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-05-19",
+      "date": "2025-05-20",
+      "from": "2025-05-26",
+      "to": "2025-06-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-05-19",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-05-19",
-      "date": "2025-05-20",
+      "date": "2025-05-21",
       "from": "2025-05-26",
       "to": "2025-06-18",
       "reservedCredits": 5
@@ -2716,11 +3685,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-06-02",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-06-02",
+      "date": "2025-06-03",
+      "from": "2025-06-09",
+      "to": "2025-07-02",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-06-02",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-06-02",
-      "date": "2025-06-03",
+      "date": "2025-06-04",
       "from": "2025-06-09",
       "to": "2025-07-02",
       "reservedCredits": 5
@@ -2736,11 +3715,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-06-16",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-06-16",
+      "date": "2025-06-17",
+      "from": "2025-06-23",
+      "to": "2025-07-16",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-06-16",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-06-16",
-      "date": "2025-06-17",
+      "date": "2025-06-18",
       "from": "2025-06-23",
       "to": "2025-07-16",
       "reservedCredits": 5
@@ -2756,11 +3745,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-06-30",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-06-30",
+      "date": "2025-07-01",
+      "from": "2025-07-07",
+      "to": "2025-07-30",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-06-30",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-06-30",
-      "date": "2025-07-01",
+      "date": "2025-07-02",
       "from": "2025-07-07",
       "to": "2025-07-30",
       "reservedCredits": 5
@@ -2776,11 +3775,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-07-14",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-07-14",
+      "date": "2025-07-15",
+      "from": "2025-07-21",
+      "to": "2025-08-13",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-07-14",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-07-14",
-      "date": "2025-07-15",
+      "date": "2025-07-16",
       "from": "2025-07-21",
       "to": "2025-08-13",
       "reservedCredits": 5
@@ -2796,11 +3805,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-07-28",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-07-28",
+      "date": "2025-07-29",
+      "from": "2025-08-04",
+      "to": "2025-08-27",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-07-28",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-07-28",
-      "date": "2025-07-29",
+      "date": "2025-07-30",
       "from": "2025-08-04",
       "to": "2025-08-27",
       "reservedCredits": 5
@@ -2816,11 +3835,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-08-11",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-08-11",
+      "date": "2025-08-12",
+      "from": "2025-08-18",
+      "to": "2025-09-10",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-08-11",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-08-11",
-      "date": "2025-08-12",
+      "date": "2025-08-13",
       "from": "2025-08-18",
       "to": "2025-09-10",
       "reservedCredits": 5
@@ -2836,11 +3865,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-08-25",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-08-25",
+      "date": "2025-08-26",
+      "from": "2025-09-01",
+      "to": "2025-09-24",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-08-25",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-08-25",
-      "date": "2025-08-26",
+      "date": "2025-08-27",
       "from": "2025-09-01",
       "to": "2025-09-24",
       "reservedCredits": 5
@@ -2856,11 +3895,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-09-08",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-09-08",
+      "date": "2025-09-09",
+      "from": "2025-09-15",
+      "to": "2025-10-08",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-09-08",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-09-08",
-      "date": "2025-09-09",
+      "date": "2025-09-10",
       "from": "2025-09-15",
       "to": "2025-10-08",
       "reservedCredits": 5
@@ -2876,11 +3925,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-09-22",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-09-22",
+      "date": "2025-09-23",
+      "from": "2025-09-29",
+      "to": "2025-10-22",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-09-22",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-09-22",
-      "date": "2025-09-23",
+      "date": "2025-09-24",
       "from": "2025-09-29",
       "to": "2025-10-22",
       "reservedCredits": 5
@@ -2896,11 +3955,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-NVDA-2025-10-06",
+      "symbol": "NVDA",
+      "role": "revalidation",
+      "signalDate": "2025-10-06",
+      "date": "2025-10-07",
+      "from": "2025-10-13",
+      "to": "2025-11-05",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-NVDA-2025-10-06",
       "symbol": "NVDA",
       "role": "fill",
       "signalDate": "2025-10-06",
-      "date": "2025-10-07",
+      "date": "2025-10-08",
       "from": "2025-10-13",
       "to": "2025-11-05",
       "reservedCredits": 5
@@ -2916,11 +3985,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2024-10-21",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2024-10-21",
+      "date": "2024-10-22",
+      "from": "2024-10-28",
+      "to": "2024-11-20",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2024-10-21",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2024-10-21",
-      "date": "2024-10-22",
+      "date": "2024-10-23",
       "from": "2024-10-28",
       "to": "2024-11-20",
       "reservedCredits": 5
@@ -2936,11 +4015,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2024-11-04",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2024-11-04",
+      "date": "2024-11-05",
+      "from": "2024-11-11",
+      "to": "2024-12-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2024-11-04",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2024-11-04",
-      "date": "2024-11-05",
+      "date": "2024-11-06",
       "from": "2024-11-11",
       "to": "2024-12-04",
       "reservedCredits": 5
@@ -2956,11 +4045,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2024-11-18",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2024-11-18",
+      "date": "2024-11-19",
+      "from": "2024-11-25",
+      "to": "2024-12-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2024-11-18",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2024-11-18",
-      "date": "2024-11-19",
+      "date": "2024-11-20",
       "from": "2024-11-25",
       "to": "2024-12-18",
       "reservedCredits": 5
@@ -2976,11 +4075,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2024-12-02",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2024-12-02",
+      "date": "2024-12-03",
+      "from": "2024-12-09",
+      "to": "2025-01-01",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2024-12-02",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2024-12-02",
-      "date": "2024-12-03",
+      "date": "2024-12-04",
       "from": "2024-12-09",
       "to": "2025-01-01",
       "reservedCredits": 5
@@ -2996,11 +4105,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2024-12-16",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2024-12-16",
+      "date": "2024-12-17",
+      "from": "2024-12-23",
+      "to": "2025-01-15",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2024-12-16",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2024-12-16",
-      "date": "2024-12-17",
+      "date": "2024-12-18",
       "from": "2024-12-23",
       "to": "2025-01-15",
       "reservedCredits": 5
@@ -3016,11 +4135,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2024-12-30",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2024-12-30",
+      "date": "2024-12-31",
+      "from": "2025-01-06",
+      "to": "2025-01-29",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2024-12-30",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2024-12-30",
-      "date": "2024-12-31",
+      "date": "2025-01-02",
       "from": "2025-01-06",
       "to": "2025-01-29",
       "reservedCredits": 5
@@ -3036,11 +4165,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-01-13",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-01-13",
+      "date": "2025-01-14",
+      "from": "2025-01-20",
+      "to": "2025-02-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-01-13",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-01-13",
-      "date": "2025-01-14",
+      "date": "2025-01-15",
       "from": "2025-01-20",
       "to": "2025-02-12",
       "reservedCredits": 5
@@ -3056,11 +4195,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-01-27",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-01-27",
+      "date": "2025-01-28",
+      "from": "2025-02-03",
+      "to": "2025-02-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-01-27",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-01-27",
-      "date": "2025-01-28",
+      "date": "2025-01-29",
       "from": "2025-02-03",
       "to": "2025-02-26",
       "reservedCredits": 5
@@ -3076,11 +4225,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-02-10",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-02-10",
+      "date": "2025-02-11",
+      "from": "2025-02-17",
+      "to": "2025-03-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-02-10",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-02-10",
-      "date": "2025-02-11",
+      "date": "2025-02-12",
       "from": "2025-02-17",
       "to": "2025-03-12",
       "reservedCredits": 5
@@ -3096,11 +4255,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-02-24",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-02-24",
+      "date": "2025-02-25",
+      "from": "2025-03-03",
+      "to": "2025-03-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-02-24",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-02-24",
-      "date": "2025-02-25",
+      "date": "2025-02-26",
       "from": "2025-03-03",
       "to": "2025-03-26",
       "reservedCredits": 5
@@ -3116,11 +4285,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-03-10",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-03-10",
+      "date": "2025-03-11",
+      "from": "2025-03-17",
+      "to": "2025-04-09",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-03-10",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-03-10",
-      "date": "2025-03-11",
+      "date": "2025-03-12",
       "from": "2025-03-17",
       "to": "2025-04-09",
       "reservedCredits": 5
@@ -3136,11 +4315,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-03-24",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-03-24",
+      "date": "2025-03-25",
+      "from": "2025-03-31",
+      "to": "2025-04-23",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-03-24",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-03-24",
-      "date": "2025-03-25",
+      "date": "2025-03-26",
       "from": "2025-03-31",
       "to": "2025-04-23",
       "reservedCredits": 5
@@ -3156,11 +4345,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-04-07",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-04-07",
+      "date": "2025-04-08",
+      "from": "2025-04-14",
+      "to": "2025-05-07",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-04-07",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-04-07",
-      "date": "2025-04-08",
+      "date": "2025-04-09",
       "from": "2025-04-14",
       "to": "2025-05-07",
       "reservedCredits": 5
@@ -3176,11 +4375,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-04-21",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-04-21",
+      "date": "2025-04-22",
+      "from": "2025-04-28",
+      "to": "2025-05-21",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-04-21",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-04-21",
-      "date": "2025-04-22",
+      "date": "2025-04-23",
       "from": "2025-04-28",
       "to": "2025-05-21",
       "reservedCredits": 5
@@ -3196,11 +4405,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-05-05",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-05-05",
+      "date": "2025-05-06",
+      "from": "2025-05-12",
+      "to": "2025-06-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-05-05",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-05-05",
-      "date": "2025-05-06",
+      "date": "2025-05-07",
       "from": "2025-05-12",
       "to": "2025-06-04",
       "reservedCredits": 5
@@ -3216,11 +4435,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-05-19",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-05-19",
+      "date": "2025-05-20",
+      "from": "2025-05-26",
+      "to": "2025-06-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-05-19",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-05-19",
-      "date": "2025-05-20",
+      "date": "2025-05-21",
       "from": "2025-05-26",
       "to": "2025-06-18",
       "reservedCredits": 5
@@ -3236,11 +4465,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-06-02",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-06-02",
+      "date": "2025-06-03",
+      "from": "2025-06-09",
+      "to": "2025-07-02",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-06-02",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-06-02",
-      "date": "2025-06-03",
+      "date": "2025-06-04",
       "from": "2025-06-09",
       "to": "2025-07-02",
       "reservedCredits": 5
@@ -3256,11 +4495,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-06-16",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-06-16",
+      "date": "2025-06-17",
+      "from": "2025-06-23",
+      "to": "2025-07-16",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-06-16",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-06-16",
-      "date": "2025-06-17",
+      "date": "2025-06-18",
       "from": "2025-06-23",
       "to": "2025-07-16",
       "reservedCredits": 5
@@ -3276,11 +4525,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-06-30",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-06-30",
+      "date": "2025-07-01",
+      "from": "2025-07-07",
+      "to": "2025-07-30",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-06-30",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-06-30",
-      "date": "2025-07-01",
+      "date": "2025-07-02",
       "from": "2025-07-07",
       "to": "2025-07-30",
       "reservedCredits": 5
@@ -3296,11 +4555,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-07-14",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-07-14",
+      "date": "2025-07-15",
+      "from": "2025-07-21",
+      "to": "2025-08-13",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-07-14",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-07-14",
-      "date": "2025-07-15",
+      "date": "2025-07-16",
       "from": "2025-07-21",
       "to": "2025-08-13",
       "reservedCredits": 5
@@ -3316,11 +4585,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-07-28",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-07-28",
+      "date": "2025-07-29",
+      "from": "2025-08-04",
+      "to": "2025-08-27",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-07-28",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-07-28",
-      "date": "2025-07-29",
+      "date": "2025-07-30",
       "from": "2025-08-04",
       "to": "2025-08-27",
       "reservedCredits": 5
@@ -3336,11 +4615,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-08-11",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-08-11",
+      "date": "2025-08-12",
+      "from": "2025-08-18",
+      "to": "2025-09-10",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-08-11",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-08-11",
-      "date": "2025-08-12",
+      "date": "2025-08-13",
       "from": "2025-08-18",
       "to": "2025-09-10",
       "reservedCredits": 5
@@ -3356,11 +4645,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-08-25",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-08-25",
+      "date": "2025-08-26",
+      "from": "2025-09-01",
+      "to": "2025-09-24",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-08-25",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-08-25",
-      "date": "2025-08-26",
+      "date": "2025-08-27",
       "from": "2025-09-01",
       "to": "2025-09-24",
       "reservedCredits": 5
@@ -3376,11 +4675,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-09-08",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-09-08",
+      "date": "2025-09-09",
+      "from": "2025-09-15",
+      "to": "2025-10-08",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-09-08",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-09-08",
-      "date": "2025-09-09",
+      "date": "2025-09-10",
       "from": "2025-09-15",
       "to": "2025-10-08",
       "reservedCredits": 5
@@ -3396,11 +4705,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-09-22",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-09-22",
+      "date": "2025-09-23",
+      "from": "2025-09-29",
+      "to": "2025-10-22",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-09-22",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-09-22",
-      "date": "2025-09-23",
+      "date": "2025-09-24",
       "from": "2025-09-29",
       "to": "2025-10-22",
       "reservedCredits": 5
@@ -3416,11 +4735,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-AMD-2025-10-06",
+      "symbol": "AMD",
+      "role": "revalidation",
+      "signalDate": "2025-10-06",
+      "date": "2025-10-07",
+      "from": "2025-10-13",
+      "to": "2025-11-05",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-AMD-2025-10-06",
       "symbol": "AMD",
       "role": "fill",
       "signalDate": "2025-10-06",
-      "date": "2025-10-07",
+      "date": "2025-10-08",
       "from": "2025-10-13",
       "to": "2025-11-05",
       "reservedCredits": 5
@@ -3436,11 +4765,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2024-10-21",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2024-10-21",
+      "date": "2024-10-22",
+      "from": "2024-10-28",
+      "to": "2024-11-20",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2024-10-21",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2024-10-21",
-      "date": "2024-10-22",
+      "date": "2024-10-23",
       "from": "2024-10-28",
       "to": "2024-11-20",
       "reservedCredits": 5
@@ -3456,11 +4795,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2024-11-04",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2024-11-04",
+      "date": "2024-11-05",
+      "from": "2024-11-11",
+      "to": "2024-12-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2024-11-04",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2024-11-04",
-      "date": "2024-11-05",
+      "date": "2024-11-06",
       "from": "2024-11-11",
       "to": "2024-12-04",
       "reservedCredits": 5
@@ -3476,11 +4825,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2024-11-18",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2024-11-18",
+      "date": "2024-11-19",
+      "from": "2024-11-25",
+      "to": "2024-12-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2024-11-18",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2024-11-18",
-      "date": "2024-11-19",
+      "date": "2024-11-20",
       "from": "2024-11-25",
       "to": "2024-12-18",
       "reservedCredits": 5
@@ -3496,11 +4855,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2024-12-02",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2024-12-02",
+      "date": "2024-12-03",
+      "from": "2024-12-09",
+      "to": "2025-01-01",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2024-12-02",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2024-12-02",
-      "date": "2024-12-03",
+      "date": "2024-12-04",
       "from": "2024-12-09",
       "to": "2025-01-01",
       "reservedCredits": 5
@@ -3516,11 +4885,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2024-12-16",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2024-12-16",
+      "date": "2024-12-17",
+      "from": "2024-12-23",
+      "to": "2025-01-15",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2024-12-16",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2024-12-16",
-      "date": "2024-12-17",
+      "date": "2024-12-18",
       "from": "2024-12-23",
       "to": "2025-01-15",
       "reservedCredits": 5
@@ -3536,11 +4915,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2024-12-30",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2024-12-30",
+      "date": "2024-12-31",
+      "from": "2025-01-06",
+      "to": "2025-01-29",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2024-12-30",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2024-12-30",
-      "date": "2024-12-31",
+      "date": "2025-01-02",
       "from": "2025-01-06",
       "to": "2025-01-29",
       "reservedCredits": 5
@@ -3556,11 +4945,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-01-13",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-01-13",
+      "date": "2025-01-14",
+      "from": "2025-01-20",
+      "to": "2025-02-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-01-13",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-01-13",
-      "date": "2025-01-14",
+      "date": "2025-01-15",
       "from": "2025-01-20",
       "to": "2025-02-12",
       "reservedCredits": 5
@@ -3576,11 +4975,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-01-27",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-01-27",
+      "date": "2025-01-28",
+      "from": "2025-02-03",
+      "to": "2025-02-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-01-27",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-01-27",
-      "date": "2025-01-28",
+      "date": "2025-01-29",
       "from": "2025-02-03",
       "to": "2025-02-26",
       "reservedCredits": 5
@@ -3596,11 +5005,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-02-10",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-02-10",
+      "date": "2025-02-11",
+      "from": "2025-02-17",
+      "to": "2025-03-12",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-02-10",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-02-10",
-      "date": "2025-02-11",
+      "date": "2025-02-12",
       "from": "2025-02-17",
       "to": "2025-03-12",
       "reservedCredits": 5
@@ -3616,11 +5035,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-02-24",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-02-24",
+      "date": "2025-02-25",
+      "from": "2025-03-03",
+      "to": "2025-03-26",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-02-24",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-02-24",
-      "date": "2025-02-25",
+      "date": "2025-02-26",
       "from": "2025-03-03",
       "to": "2025-03-26",
       "reservedCredits": 5
@@ -3636,11 +5065,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-03-10",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-03-10",
+      "date": "2025-03-11",
+      "from": "2025-03-17",
+      "to": "2025-04-09",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-03-10",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-03-10",
-      "date": "2025-03-11",
+      "date": "2025-03-12",
       "from": "2025-03-17",
       "to": "2025-04-09",
       "reservedCredits": 5
@@ -3656,11 +5095,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-03-24",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-03-24",
+      "date": "2025-03-25",
+      "from": "2025-03-31",
+      "to": "2025-04-23",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-03-24",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-03-24",
-      "date": "2025-03-25",
+      "date": "2025-03-26",
       "from": "2025-03-31",
       "to": "2025-04-23",
       "reservedCredits": 5
@@ -3676,11 +5125,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-04-07",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-04-07",
+      "date": "2025-04-08",
+      "from": "2025-04-14",
+      "to": "2025-05-07",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-04-07",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-04-07",
-      "date": "2025-04-08",
+      "date": "2025-04-09",
       "from": "2025-04-14",
       "to": "2025-05-07",
       "reservedCredits": 5
@@ -3696,11 +5155,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-04-21",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-04-21",
+      "date": "2025-04-22",
+      "from": "2025-04-28",
+      "to": "2025-05-21",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-04-21",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-04-21",
-      "date": "2025-04-22",
+      "date": "2025-04-23",
       "from": "2025-04-28",
       "to": "2025-05-21",
       "reservedCredits": 5
@@ -3716,11 +5185,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-05-05",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-05-05",
+      "date": "2025-05-06",
+      "from": "2025-05-12",
+      "to": "2025-06-04",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-05-05",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-05-05",
-      "date": "2025-05-06",
+      "date": "2025-05-07",
       "from": "2025-05-12",
       "to": "2025-06-04",
       "reservedCredits": 5
@@ -3736,11 +5215,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-05-19",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-05-19",
+      "date": "2025-05-20",
+      "from": "2025-05-26",
+      "to": "2025-06-18",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-05-19",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-05-19",
-      "date": "2025-05-20",
+      "date": "2025-05-21",
       "from": "2025-05-26",
       "to": "2025-06-18",
       "reservedCredits": 5
@@ -3756,11 +5245,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-06-02",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-06-02",
+      "date": "2025-06-03",
+      "from": "2025-06-09",
+      "to": "2025-07-02",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-06-02",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-06-02",
-      "date": "2025-06-03",
+      "date": "2025-06-04",
       "from": "2025-06-09",
       "to": "2025-07-02",
       "reservedCredits": 5
@@ -3776,11 +5275,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-06-16",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-06-16",
+      "date": "2025-06-17",
+      "from": "2025-06-23",
+      "to": "2025-07-16",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-06-16",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-06-16",
-      "date": "2025-06-17",
+      "date": "2025-06-18",
       "from": "2025-06-23",
       "to": "2025-07-16",
       "reservedCredits": 5
@@ -3796,11 +5305,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-06-30",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-06-30",
+      "date": "2025-07-01",
+      "from": "2025-07-07",
+      "to": "2025-07-30",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-06-30",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-06-30",
-      "date": "2025-07-01",
+      "date": "2025-07-02",
       "from": "2025-07-07",
       "to": "2025-07-30",
       "reservedCredits": 5
@@ -3816,11 +5335,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-07-14",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-07-14",
+      "date": "2025-07-15",
+      "from": "2025-07-21",
+      "to": "2025-08-13",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-07-14",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-07-14",
-      "date": "2025-07-15",
+      "date": "2025-07-16",
       "from": "2025-07-21",
       "to": "2025-08-13",
       "reservedCredits": 5
@@ -3836,11 +5365,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-07-28",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-07-28",
+      "date": "2025-07-29",
+      "from": "2025-08-04",
+      "to": "2025-08-27",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-07-28",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-07-28",
-      "date": "2025-07-29",
+      "date": "2025-07-30",
       "from": "2025-08-04",
       "to": "2025-08-27",
       "reservedCredits": 5
@@ -3856,11 +5395,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-08-11",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-08-11",
+      "date": "2025-08-12",
+      "from": "2025-08-18",
+      "to": "2025-09-10",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-08-11",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-08-11",
-      "date": "2025-08-12",
+      "date": "2025-08-13",
       "from": "2025-08-18",
       "to": "2025-09-10",
       "reservedCredits": 5
@@ -3876,11 +5425,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-08-25",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-08-25",
+      "date": "2025-08-26",
+      "from": "2025-09-01",
+      "to": "2025-09-24",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-08-25",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-08-25",
-      "date": "2025-08-26",
+      "date": "2025-08-27",
       "from": "2025-09-01",
       "to": "2025-09-24",
       "reservedCredits": 5
@@ -3896,11 +5455,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-09-08",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-09-08",
+      "date": "2025-09-09",
+      "from": "2025-09-15",
+      "to": "2025-10-08",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-09-08",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-09-08",
-      "date": "2025-09-09",
+      "date": "2025-09-10",
       "from": "2025-09-15",
       "to": "2025-10-08",
       "reservedCredits": 5
@@ -3916,11 +5485,21 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-09-22",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-09-22",
+      "date": "2025-09-23",
+      "from": "2025-09-29",
+      "to": "2025-10-22",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-09-22",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-09-22",
-      "date": "2025-09-23",
+      "date": "2025-09-24",
       "from": "2025-09-29",
       "to": "2025-10-22",
       "reservedCredits": 5
@@ -3936,39 +5515,33 @@
       "reservedCredits": 5
     },
     {
+      "id": "revalidation-SOFI-2025-10-06",
+      "symbol": "SOFI",
+      "role": "revalidation",
+      "signalDate": "2025-10-06",
+      "date": "2025-10-07",
+      "from": "2025-10-13",
+      "to": "2025-11-05",
+      "reservedCredits": 5
+    },
+    {
       "id": "fill-SOFI-2025-10-06",
       "symbol": "SOFI",
       "role": "fill",
       "signalDate": "2025-10-06",
-      "date": "2025-10-07",
+      "date": "2025-10-08",
       "from": "2025-10-13",
       "to": "2025-11-05",
       "reservedCredits": 5
     }
   ],
   "chainTemplate": "/v1/options/chain/{symbol}/?date={date}&from={from}&to={to}&strike={outwardRoundedSignalSpotBand}&nonstandard=false&dateformat=unix&limit=4001",
-  "licensedPreclose": {
-    "symbols": [
-      "SPY",
-      "QQQ",
-      "MSFT",
-      "NVDA",
-      "AMD",
-      "SOFI"
-    ],
-    "sessionField": "signals.entryDate",
+  "revalidation": {
+    "chainRole": "revalidation",
+    "sessionField": "signals.revalidationDate",
     "observationField": "signals.revalidationObservedAt",
     "latestAvailabilityField": "signals.orderAt",
-    "fields": [
-      "OCC",
-      "bid",
-      "ask",
-      "bid size",
-      "ask size",
-      "spot",
-      "observation time",
-      "availability evidence"
-    ]
+    "spot": "regular closing candle from revalidationDate"
   },
   "independentEvidence": {
     "symbols": [
