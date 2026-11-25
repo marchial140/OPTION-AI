@@ -1,0 +1,779 @@
+{
+  "fixture": "synthetic mathematical validation",
+  "spot": 100,
+  "horizonSessions": 21,
+  "annualizedVolatility": 0.3,
+  "seed": 42,
+  "analytical": [
+    {
+      "id": "atm-long-call",
+      "expected": 345.38621290854724,
+      "reference": 345.3862129085475,
+      "absoluteError": 2.8421709430404007e-13,
+      "tolerance": 0.00001
+    },
+    {
+      "id": "atm-long-put",
+      "expected": 345.38621290854724,
+      "reference": 345.3862129085641,
+      "absoluteError": 1.688249540165998e-11,
+      "tolerance": 0.00001
+    },
+    {
+      "id": "wide-call-spread",
+      "expected": 1141.4678226563312,
+      "reference": 1141.4678226563321,
+      "absoluteError": 9.094947017729282e-13,
+      "tolerance": 0.00001
+    },
+    {
+      "id": "wide-put-spread",
+      "expected": 658.6904578832092,
+      "reference": 658.6904578832294,
+      "absoluteError": 2.0236257114447653e-11,
+      "tolerance": 0.00001
+    },
+    {
+      "id": "narrow-call-spread",
+      "expected": 0.14481230343183557,
+      "reference": 0.1448123034475624,
+      "absoluteError": 1.572683649975204e-11,
+      "tolerance": 0.00001
+    },
+    {
+      "id": "narrow-put-spread",
+      "expected": 0.15517388975021124,
+      "reference": 0.15517388976781255,
+      "absoluteError": 1.7601309298953538e-11,
+      "tolerance": 0.00001
+    },
+    {
+      "id": "deep-itm-call",
+      "expected": 11100.000017323335,
+      "reference": 11100.000017323338,
+      "absoluteError": 3.637978807091713e-12,
+      "tolerance": 0.000011100000017323339
+    },
+    {
+      "id": "deep-otm-call",
+      "expected": 0.0019765218636491003,
+      "reference": 0.0019765218656444786,
+      "absoluteError": 1.995378254987523e-12,
+      "tolerance": 0.00001
+    },
+    {
+      "id": "deep-itm-put",
+      "expected": 4500.001976521864,
+      "reference": 4500.001976521868,
+      "absoluteError": 3.637978807091713e-12,
+      "tolerance": 0.00001
+    },
+    {
+      "id": "deep-otm-put",
+      "expected": 0.000005774445270859027,
+      "reference": 0.0000057744450912261005,
+      "absoluteError": 1.7963292664327848e-13,
+      "tolerance": 0.00001
+    }
+  ],
+  "convergence": [
+    {
+      "id": "atm-long-call",
+      "simulations": 10000,
+      "estimate": 344.5390813880827,
+      "error": -0.8471315204645293,
+      "standardError": 5.269792994637804,
+      "errorInStandardErrors": -0.1607523334078805
+    },
+    {
+      "id": "atm-long-put",
+      "simulations": 10000,
+      "estimate": 346.0434706961228,
+      "error": 0.6572577875755883,
+      "standardError": 4.813470807617004,
+      "errorInStandardErrors": 0.13654550195578638
+    },
+    {
+      "id": "wide-call-spread",
+      "simulations": 10000,
+      "estimate": 1141.805560093837,
+      "error": 0.3377374375056661,
+      "standardError": 12.857147242689273,
+      "errorInStandardErrors": 0.02626845840143175
+    },
+    {
+      "id": "wide-put-spread",
+      "simulations": 10000,
+      "estimate": 659.1294146844762,
+      "error": 0.43895680126695424,
+      "standardError": 6.410492182595563,
+      "errorInStandardErrors": 0.06847474246341312
+    },
+    {
+      "id": "atm-long-call",
+      "simulations": 100000,
+      "estimate": 341.47927355662966,
+      "error": -3.906939351917572,
+      "standardError": 1.6700809480150884,
+      "errorInStandardErrors": -2.3393712481787285
+    },
+    {
+      "id": "atm-long-put",
+      "simulations": 100000,
+      "estimate": 348.33667112538757,
+      "error": 2.9504582168403317,
+      "standardError": 1.5257237838179691,
+      "errorInStandardErrors": 1.9338088900057053
+    },
+    {
+      "id": "wide-call-spread",
+      "simulations": 100000,
+      "estimate": 1131.719933274549,
+      "error": -9.747889381782215,
+      "standardError": 4.047785290175377,
+      "errorInStandardErrors": -2.408203173582824
+    },
+    {
+      "id": "wide-put-spread",
+      "simulations": 100000,
+      "estimate": 662.7266507652552,
+      "error": 4.0361928820459525,
+      "standardError": 2.028412772358014,
+      "errorInStandardErrors": 1.9898281735595216
+    },
+    {
+      "id": "atm-long-call",
+      "simulations": 1000000,
+      "estimate": 346.1088936812864,
+      "error": 0.7226807727391815,
+      "standardError": 0.5321526745389755,
+      "errorInStandardErrors": 1.3580327738938227
+    },
+    {
+      "id": "atm-long-put",
+      "simulations": 1000000,
+      "estimate": 345.47911047193634,
+      "error": 0.09289756338910138,
+      "standardError": 0.481277938549719,
+      "errorInStandardErrors": 0.1930226921870521
+    },
+    {
+      "id": "wide-call-spread",
+      "simulations": 1000000,
+      "estimate": 1143.2507641464479,
+      "error": 1.7829414901166274,
+      "standardError": 1.2872199712438022,
+      "errorInStandardErrors": 1.3851101831443964
+    },
+    {
+      "id": "wide-put-spread",
+      "simulations": 1000000,
+      "estimate": 658.4076845127516,
+      "error": -0.2827733704575621,
+      "standardError": 0.6406886105779083,
+      "errorInStandardErrors": -0.4413585098734585
+    }
+  ],
+  "stress": [
+    {
+      "strategy": "long_call",
+      "horizonSessions": 12,
+      "empiricalObservations": 241,
+      "historicalAnnualizedVolatility": 0.20213823366686814,
+      "historicalHorizonMeanReturn": 0.006073095290848159,
+      "historicalHorizonVolatility": 0.011933495067357268,
+      "lognormal": {
+        "minimumExpectedNetPnl": -82.26607641989295,
+        "maximumExpectedNetPnl": 12.228714883523338,
+        "minimumProbabilityOfProfit": 0.24899299028174418,
+        "maximumProbabilityOfProfit": 0.35326674017143783,
+        "positiveScenarios": 1,
+        "decisions": {
+          "standard": "NO_TRADE",
+          "conservative": "NO_TRADE"
+        },
+        "baselineExpectedNetPnl": -35.3401118479774,
+        "baselineProbabilityOfProfit": 0.30991471719486596,
+        "scenarios": [
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -82.26607641989295,
+            "probabilityOfProfit": 0.24899299028174418
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -70.52798123843053,
+            "probabilityOfProfit": 0.27086786677938374
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -58.12059576956946,
+            "probabilityOfProfit": 0.2936617853980745
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -47.184013394649384,
+            "probabilityOfProfit": 0.29113585649773505
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -35.3401118479774,
+            "probabilityOfProfit": 0.30991471719486596
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -22.954904504916897,
+            "probabilityOfProfit": 0.3292031014481119
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -12.084064880852509,
+            "probabilityOfProfit": 0.3204366574758435
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -0.15566555120264525,
+            "probabilityOfProfit": 0.33669611987499204
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 12.228714883523338,
+            "probabilityOfProfit": 0.35326674017143783
+          }
+        ]
+      },
+      "empirical": {
+        "minimumExpectedNetPnl": -148.58555785860892,
+        "maximumExpectedNetPnl": -98.95998885058714,
+        "minimumProbabilityOfProfit": 0,
+        "maximumProbabilityOfProfit": 0.2821576763485477,
+        "positiveScenarios": 0,
+        "decisions": {
+          "standard": "NO_TRADE",
+          "conservative": "NO_TRADE"
+        },
+        "baselineExpectedNetPnl": -123.95997836080707,
+        "baselineProbabilityOfProfit": 0.14522821576763487,
+        "scenarios": [
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -148.58555785860892,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -133.74929303637634,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -117.30877969646394,
+            "probabilityOfProfit": 0.11618257261410789
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -138.25751389006672,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -123.95997836080707,
+            "probabilityOfProfit": 0.14522821576763487
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -108.47792151641455,
+            "probabilityOfProfit": 0.23236514522821577
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -127.80821166667818,
+            "probabilityOfProfit": 0.16182572614107885
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -113.85745328982739,
+            "probabilityOfProfit": 0.23236514522821577
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -98.95998885058714,
+            "probabilityOfProfit": 0.2821576763485477
+          }
+        ]
+      },
+      "disagreement": {
+        "standard": false,
+        "conservative": false
+      }
+    },
+    {
+      "strategy": "long_put",
+      "horizonSessions": 12,
+      "empiricalObservations": 241,
+      "historicalAnnualizedVolatility": 0.20213823366686814,
+      "historicalHorizonMeanReturn": 0.006073095290848159,
+      "historicalHorizonVolatility": 0.011933495067357268,
+      "lognormal": {
+        "minimumExpectedNetPnl": -81.95848675946215,
+        "maximumExpectedNetPnl": 11.697136739857626,
+        "minimumProbabilityOfProfit": 0.2562245177580071,
+        "maximumProbabilityOfProfit": 0.3699369511245011,
+        "positiveScenarios": 1,
+        "decisions": {
+          "standard": "NO_TRADE",
+          "conservative": "NO_TRADE"
+        },
+        "baselineExpectedNetPnl": -35.3401118479774,
+        "baselineProbabilityOfProfit": 0.3220026411370242,
+        "scenarios": [
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -58.48487479918424,
+            "probabilityOfProfit": 0.30150195879640135
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -70.52798123843053,
+            "probabilityOfProfit": 0.2784147279495501
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -81.95848675946215,
+            "probabilityOfProfit": 0.2562245177580071
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -23.40281177394138,
+            "probabilityOfProfit": 0.34158961572433516
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -35.3401118479774,
+            "probabilityOfProfit": 0.3220026411370242
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -46.79279549480887,
+            "probabilityOfProfit": 0.30289807138070485
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 11.697136739857626,
+            "probabilityOfProfit": 0.3699369511245011
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -0.15566555120264525,
+            "probabilityOfProfit": 0.35308624630637836
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -11.609176106370768,
+            "probabilityOfProfit": 0.3365188385112547
+          }
+        ]
+      },
+      "empirical": {
+        "minimumExpectedNetPnl": -202.02239337835042,
+        "maximumExpectedNetPnl": -164.6135374508736,
+        "minimumProbabilityOfProfit": 0,
+        "maximumProbabilityOfProfit": 0,
+        "positiveScenarios": 0,
+        "decisions": {
+          "standard": "NO_TRADE",
+          "conservative": "NO_TRADE"
+        },
+        "baselineExpectedNetPnl": -184.69093126928863,
+        "baselineProbabilityOfProfit": 0,
+        "scenarios": [
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -185.39088364280553,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -194.48024594485526,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -202.02239337835042,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -175.062839674266,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -184.69093126928863,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -193.19153519830368,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": -164.6135374508736,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0,
+            "expectedNetPnl": -174.588406198305,
+            "probabilityOfProfit": 0
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -183.67360253247233,
+            "probabilityOfProfit": 0
+          }
+        ]
+      },
+      "disagreement": {
+        "standard": false,
+        "conservative": false
+      }
+    },
+    {
+      "strategy": "bull_call",
+      "horizonSessions": 12,
+      "empiricalObservations": 241,
+      "historicalAnnualizedVolatility": 0.20213823366686814,
+      "historicalHorizonMeanReturn": 0.006073095290848159,
+      "historicalHorizonVolatility": 0.011933495067357268,
+      "lognormal": {
+        "minimumExpectedNetPnl": 57.269636427047146,
+        "maximumExpectedNetPnl": 96.29310504442032,
+        "minimumProbabilityOfProfit": 0.5234400132990173,
+        "maximumProbabilityOfProfit": 0.596842412937445,
+        "positiveScenarios": 9,
+        "decisions": {
+          "standard": "ELIGIBLE",
+          "conservative": "ELIGIBLE"
+        },
+        "baselineExpectedNetPnl": 79.47242030852578,
+        "baselineProbabilityOfProfit": 0.5533891446152317,
+        "scenarios": [
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 57.269636427047146,
+            "probabilityOfProfit": 0.5438900674309582
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 76.1037491575882,
+            "probabilityOfProfit": 0.5705249086875548
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 95.05188621956722,
+            "probabilityOfProfit": 0.596842412937445
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 63.11060389008111,
+            "probabilityOfProfit": 0.5319813190592984
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 79.47242030852578,
+            "probabilityOfProfit": 0.5533891446152317
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 95.91564620343439,
+            "probabilityOfProfit": 0.5746424616265406
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 67.62662792352126,
+            "probabilityOfProfit": 0.5234400132990173
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 81.9304859822023,
+            "probabilityOfProfit": 0.5413242239564116
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 96.29310504442032,
+            "probabilityOfProfit": 0.5591251647805684
+          }
+        ]
+      },
+      "empirical": {
+        "minimumExpectedNetPnl": 105.5053257841954,
+        "maximumExpectedNetPnl": 153.4136136818891,
+        "minimumProbabilityOfProfit": 0.6763485477178424,
+        "maximumProbabilityOfProfit": 1,
+        "positiveScenarios": 9,
+        "decisions": {
+          "standard": "ELIGIBLE",
+          "conservative": "ELIGIBLE"
+        },
+        "baselineExpectedNetPnl": 129.43095290848157,
+        "baselineProbabilityOfProfit": 0.7759336099585062,
+        "scenarios": [
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 105.5053257841966,
+            "probabilityOfProfit": 0.7842323651452282
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 129.4309529084789,
+            "probabilityOfProfit": 0.921161825726141
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 153.4136136818865,
+            "probabilityOfProfit": 1
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 105.50532578419927,
+            "probabilityOfProfit": 0.7136929460580913
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 129.43095290848157,
+            "probabilityOfProfit": 0.7759336099585062
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 153.4136136818891,
+            "probabilityOfProfit": 0.8713692946058091
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 105.5053257841954,
+            "probabilityOfProfit": 0.6763485477178424
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 129.4309529084776,
+            "probabilityOfProfit": 0.7219917012448133
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 153.41361368188518,
+            "probabilityOfProfit": 0.7759336099585062
+          }
+        ]
+      },
+      "disagreement": {
+        "standard": false,
+        "conservative": false
+      }
+    },
+    {
+      "strategy": "bear_put",
+      "horizonSessions": 12,
+      "empiricalObservations": 241,
+      "historicalAnnualizedVolatility": 0.20213823366686814,
+      "historicalHorizonMeanReturn": 0.006073095290848159,
+      "historicalHorizonVolatility": 0.011933495067357268,
+      "lognormal": {
+        "minimumExpectedNetPnl": 62.830477469117284,
+        "maximumExpectedNetPnl": 109.4002951556065,
+        "minimumProbabilityOfProfit": 0.5441243400805751,
+        "maximumProbabilityOfProfit": 0.6099286502482213,
+        "positiveScenarios": 9,
+        "decisions": {
+          "standard": "ELIGIBLE",
+          "conservative": "ELIGIBLE"
+        },
+        "baselineExpectedNetPnl": 88.76326459764641,
+        "baselineProbabilityOfProfit": 0.5703514120872942,
+        "scenarios": [
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 100.54586056568132,
+            "probabilityOfProfit": 0.6099286502482213
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 81.6430484569388,
+            "probabilityOfProfit": 0.5838143739080055
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 62.830477469117284,
+            "probabilityOfProfit": 0.5573246231964066
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 105.19259789195974,
+            "probabilityOfProfit": 0.5914382664982001
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 88.76326459764641,
+            "probabilityOfProfit": 0.5703514120872942
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 72.39280000548598,
+            "probabilityOfProfit": 0.5490618688877603
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 109.4002951556065,
+            "probabilityOfProfit": 0.5795694341679691
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 95.03356636542145,
+            "probabilityOfProfit": 0.5619089811422868
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": 80.7033479018719,
+            "probabilityOfProfit": 0.5441243400805751
+          }
+        ]
+      },
+      "empirical": {
+        "minimumExpectedNetPnl": -16.013613681889126,
+        "maximumExpectedNetPnl": 31.89467421580457,
+        "minimumProbabilityOfProfit": 0.4605809128630705,
+        "maximumProbabilityOfProfit": 0.5767634854771784,
+        "positiveScenarios": 6,
+        "decisions": {
+          "standard": "ELIGIBLE",
+          "conservative": "NO_TRADE"
+        },
+        "baselineExpectedNetPnl": 7.969047091518405,
+        "baselineProbabilityOfProfit": 0.5186721991701245,
+        "scenarios": [
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 31.894674215803377,
+            "probabilityOfProfit": 0.5767634854771784
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 7.969047091521077,
+            "probabilityOfProfit": 0.5228215767634855
+          },
+          {
+            "volatilityMultiplier": 0.8,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -16.01361368188651,
+            "probabilityOfProfit": 0.4605809128630705
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 31.894674215800705,
+            "probabilityOfProfit": 0.5601659751037344
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 7.969047091518405,
+            "probabilityOfProfit": 0.5186721991701245
+          },
+          {
+            "volatilityMultiplier": 1,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -16.013613681889126,
+            "probabilityOfProfit": 0.46887966804979253
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": -0.05,
+            "expectedNetPnl": 31.89467421580457,
+            "probabilityOfProfit": 0.5560165975103735
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0,
+            "expectedNetPnl": 7.969047091522384,
+            "probabilityOfProfit": 0.5103734439834025
+          },
+          {
+            "volatilityMultiplier": 1.2,
+            "driftAdjustment": 0.05,
+            "expectedNetPnl": -16.013613681885204,
+            "probabilityOfProfit": 0.48132780082987553
+          }
+        ]
+      },
+      "disagreement": {
+        "standard": false,
+        "conservative": true
+      }
+    }
+  ]
+}
