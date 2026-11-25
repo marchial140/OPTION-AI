@@ -1,0 +1,42 @@
+/** Research protocol fixed before implementation and numerical validation. */
+export const phase2Protocol = {
+  sessionsPerYear: 252,
+  volatilityLookbackReturns: 252,
+  empiricalLookbackReturns: 252,
+  minimumCloses: 253,
+  logReturnSampleDegreesOfFreedom: 1,
+  baselineArithmeticDrift: 0,
+  volatilityMultipliers: [0.8, 1, 1.2],
+  arithmeticDriftShocks: [-0.05, 0, 0.05],
+  minExpectedNetPnlExclusive: 0,
+  downsideTailProbability: 0.05,
+  quantileProbabilities: [0.05, 0.5, 0.95],
+  randomSeed: 42,
+  simulationSizes: [10_000, 100_000, 1_000_000],
+  validation: {
+    quadratureAbsoluteToleranceUsd: 0.00001,
+    quadratureRelativeTolerance: 0.000000001,
+    probabilityTolerance: 0.000000001,
+    monteCarloStandardErrorLimit: 4,
+  },
+  modelDefinitions: {
+    lognormal: 'S0 * exp((mu - sigma^2 / 2) * h / 252 + sigma * sqrt(h / 252) * Z). Sigma is the annualized sample SD of 252 completed daily log returns.',
+    empirical: 'Equally weight every contiguous h-return window in the same latest 252 completed returns. Compound each window to a price ratio. At h=0 the terminal price is the observed spot.',
+    empiricalStress: 'Scale each horizon log return deviation from its mean by the volatility multiplier. Add log(mean original ratio / mean rescaled ratio) to all transformed log returns, then add drift adjustment * h / 252.',
+    time: 'Count NY regular US equity-option settlement-session closes strictly after the forecast instant through the expiry close inclusive. An unfinished session counts once. Weekends and exchange holidays count zero, early closes count once, non-session expiries are invalid.',
+    history: 'Require 253 consecutive session closes available by the forecast instant, with point-in-time split-consistent price levels and no dividend reinvestment. Cash dividends remain in ex-date price moves. Reject absent, stale, stale-basis or conflicting required inputs.',
+    settlement: 'Keep all legs intact to expiration and use undiscounted gross intrinsic settlement less long ask / short bid entry debit and explicit total costs. Exclude early exercise, assignment, additional fees or rebates unless an explicit cost is supplied.',
+    ivDiagnostic: 'Optional European single-leg Black-Scholes inversion with explicit spot, premium, strike, horizon, rate and dividend yield. Strict no-arbitrage bounds and a converged finite root. Never use IV in either forecast.',
+    tail: 'Lower-tail ES is the mean of the worst 5% of P&L probability mass. At a quantile atom, include only the mass needed to finish the 5% tail.',
+  },
+  decisionRules: {
+    standard: 'Require eligibility, a valid full forecast and baseline expected net dollar P&L strictly greater than zero.',
+    conservative: 'Also require strictly positive expected net dollar P&L across each of the nine predefined scenarios.',
+    order: 'Compare baseline expected net dollars descending, fee-inclusive maximum loss ascending, then stable strategy identifier. Keep models separate, disclose different winners or decisions.',
+  },
+  evaluationProtocol: {
+    independentValidation: 'Compare each payoff with split-at-strike adaptive normal-domain quadrature and nested seeded Monte Carlo. Report absolute error and standard error; no parameters are tuned from results.',
+    data: 'Inspect authorized local metadata. If 253 usable observations at the forecast timestamp are absent, record insufficient data and skip AAPL historical EV. No acquisition of the intended independent options holdout, no paid calls.',
+    scope: 'Use synthetic fixtures strictly to verify mathematics, decisions and robustness. Phase 1 AAPL results are exploratory. Preserve the production score, risk settings, and replay.',
+  },
+} as const;
