@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { makeOccSymbol, optionTradingCutoff, type ContractQuote } from "../../src/lib/quant";
-import { portfolioAnalytics, type AppState } from "../../src/lib/workspace";
+import { portfolioAnalytics, type AppState, type PaperTrade } from "../../src/lib/workspace";
 
 async function open(page: Page, path: string, heading: string) {
   await page.goto(path);
@@ -219,4 +219,44 @@ test("a live workspace begins simulations with blank market values and shows ana
   await page.goto("/settings");
   await expect(page.getByText("Attestée · indicative", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Courtier de test" })).toHaveAttribute("href", "https://www.cboe.com/");
+});
+
+test("paper valuations require every quote to be at or after entry", async ({ page }) => {
+  const response = await page.request.get("/api/state");
+  expect(response.ok()).toBeTruthy();
+  const snapshot: AppState = await response.json();
+
+  await page.clock.setFixedTime(new Date("2026-11-24T20:02:00Z"));
+  const entryDate = "2026-11-24T19:59:00.000Z";
+  const expiration = "2026-12-04";
+  const long: ContractQuote = {
+    id: makeOccSymbol("SPY", expiration, "call", 100), symbol: "SPY", type: "call", strike: 100,
+    expiration, multiplier: 100, bid: 3, ask: 3.1, currency: "USD",
+    quoteAt: "2026-11-24T20:00:00.000Z", retrievedAt: "2026-11-24T20:01:00.000Z",
+    source: { url: "https://www.cboe.com/", publisher: "Courtier de test", method: "manual-broker" },
+    status: "MANUAL_ATTESTED",
+  };
+  const short: ContractQuote = {
+    ...long, id: makeOccSymbol("SPY", expiration, "call", 105), strike: 105, bid: 1, ask: 1.1,
+    quoteAt: "2026-11-24T19:58:00.000Z",
+  };
+  const trade: PaperTrade = {
+    id: "paper-test", symbol: "SPY", strategy: "bull_call", status: "open", mode: "live",
+    input: { strategy: "bull_call", legs: [long, short], quantity: 1, fees: 1 },
+    entryDebit: 160, entryDate, expiration, quantity: 1, remainingQuantity: 1, fees: 1,
+    maxLoss: 161, realizedPnl: 0, exits: [],
+  };
+  const live: AppState = {
+    ...snapshot, mode: "live", scans: [], opportunities: [], candidates: [], portfolio: [trade],
+    manualQuotes: [long, short], analytics: portfolioAnalytics([trade]), marketSeries: { quotes: [], trend: [] },
+  };
+  await page.route("**/api/state", (route) => route.fulfill({ json: live }));
+  await page.goto("/portfolio");
+  await expect(page.getByText(/Résultat latent —/)).toBeVisible();
+  await expect(page.getByText(/Valeur de liquidation indicative/)).toHaveCount(0);
+
+  live.manualQuotes = [long, { ...short, quoteAt: entryDate }];
+  await page.reload();
+  await expect(page.getByText(/Résultat latent 29,00/)).toBeVisible();
+  await expect(page.getByText(/Valeur de liquidation indicative.*190,00/)).toBeVisible();
 });

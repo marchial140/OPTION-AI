@@ -154,8 +154,10 @@ function referenceValue(trade: PaperTrade, quotes: AppState["manualQuotes"]) {
   if (legs.some((quote) => !quote)) return null;
   const [long, short] = legs;
   if (!long || (short && Math.abs(Date.parse(long.quoteAt) - Date.parse(short.quoteAt)) > 300_000)) return null;
-  const value = new Decimal(long.bid).minus(short?.ask ?? 0).times(trade.remainingQuantity).times(long.multiplier);
   const asOf = short && Date.parse(short.quoteAt) < Date.parse(long.quoteAt) ? short.quoteAt : long.quoteAt;
+  const enteredAt = Date.parse(trade.entryDate);
+  if (!Number.isFinite(enteredAt) || Date.parse(asOf) < enteredAt) return null;
+  const value = new Decimal(long.bid).minus(short?.ask ?? 0).times(trade.remainingQuantity).times(long.multiplier);
   return { value: value.toNumber(), pnl: value.minus(remainingEntryCost(trade)).toNumber(), asOf, legs };
 }
 
