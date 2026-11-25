@@ -2,7 +2,8 @@ import { optionTradingCutoff } from '../../src/lib/quant';
 import { phase1Protocol } from '../phase-1/config';
 
 export const phase3Protocol = {
-  version: 'phase-3-v1',
+  version: 'phase-3.1-eod-d-plus-2',
+  originalProtocolCommit: '2ff3fa43d72bbeb96bf7e60753ec9dcc3ce6c789',
   phase2ReportCommit: 'c7bda67c1b694a33f2fded16bf7451512206985e',
   phase2ProtocolCommit: '4cec1d6addda59e0dec56c271cb162fe09044cce',
   symbols: ['SPY', 'QQQ', 'MSFT', 'NVDA', 'AMD', 'SOFI'],
@@ -27,10 +28,11 @@ export const phase3Protocol = {
     provider: 'Market Data historical date chains', settlement: 'underlying regular close and theoretical intrinsic',
   },
   timeline: {
-    timezone: 'America/New_York', signalLocalTime: '09:45', stockAvailabilityLagMinutes: 16,
-    optionAvailabilityLocalTime: '09:31', preCloseSnapshotMinutes: 45, orderLockMinutes: 20,
-    method: 'next-session-locked-limit',
+    timezone: 'America/New_York', signalLocalTime: '09:45', orderLocalTime: '09:45', stockAvailabilityLagMinutes: 16,
+    optionAvailabilityLocalTime: '09:31', maxHistoricalQuoteAgeHours: 36,
+    method: 'two-session-eod-locked-limit',
   },
+  technicalCoverage: { signalDate: '2026-10-05', revalidationDate: '2026-10-06', entryDate: '2026-10-07', purpose: 'schema-and-timestamp-only' },
   configurations: {
     A: 'Original score, direction disabled, original per-leg and per-symbol caps',
     B: 'Phase 1 B, payoff and direction disabled, uncapped eligible candidates',
@@ -51,6 +53,7 @@ export type StudySymbol = typeof phase3Protocol.symbols[number];
 export interface SignalSchedule {
   signalDate: string;
   signalAt: string;
+  revalidationDate: string;
   entryDate: string;
   revalidationObservedAt: string;
   orderAt: string;
@@ -76,6 +79,20 @@ export function studyMorning(date: string, minute: 31 | 45) {
   return new Date(cutoff - ((closeHour - 9) * 60 - minute) * minuteMs).toISOString();
 }
 
+export function buildSignalSchedule(signalDate: string): SignalSchedule {
+  const p = phase3Protocol;
+  if (optionTradingCutoff(signalDate) === null) throw new Error(`No signal session for ${signalDate}.`);
+  const revalidationDate = nextStudySession(signalDate);
+  const entryDate = nextStudySession(revalidationDate);
+  const revalidationClose = optionTradingCutoff(revalidationDate)!;
+  const fillClose = optionTradingCutoff(entryDate)!;
+  let latestExpiryDate = addCalendarDays(signalDate, p.portfolio.maxCalendarDte);
+  while (optionTradingCutoff(latestExpiryDate) === null) latestExpiryDate = addCalendarDays(latestExpiryDate, -1);
+  return { signalDate, signalAt: studyMorning(revalidationDate, 45), revalidationDate, entryDate,
+    revalidationObservedAt: new Date(revalidationClose).toISOString(), orderAt: studyMorning(entryDate, 45),
+    fillAt: new Date(fillClose).toISOString(), latestExpiryDate };
+}
+
 export function buildStudyCalendar() {
   const p = phase3Protocol;
   const closeDates: string[] = [];
@@ -86,17 +103,10 @@ export function buildStudyCalendar() {
   for (let anchor: string = p.startDate; anchor <= p.lastPermittedSignalDate; anchor = addCalendarDays(anchor, p.cadenceCalendarDays)) {
     const signalDate = optionTradingCutoff(anchor) === null ? nextStudySession(anchor) : anchor;
     if (signalDate > p.lastPermittedSignalDate) break;
-    const entryDate = nextStudySession(signalDate);
-    const close = optionTradingCutoff(entryDate)!;
-    let latestExpiryDate = addCalendarDays(signalDate, p.portfolio.maxCalendarDte);
-    while (optionTradingCutoff(latestExpiryDate) === null) latestExpiryDate = addCalendarDays(latestExpiryDate, -1);
-    signals.push({ signalDate, signalAt: studyMorning(entryDate, 45), entryDate,
-      revalidationObservedAt: new Date(close - p.timeline.preCloseSnapshotMinutes * minuteMs).toISOString(),
-      orderAt: new Date(close - p.timeline.orderLockMinutes * minuteMs).toISOString(),
-      fillAt: new Date(close).toISOString(), latestExpiryDate });
+    signals.push(buildSignalSchedule(signalDate));
   }
   if (closeDates.length !== p.expectedCloseCount || closeDates.indexOf(p.startDate) !== p.precedingSessions
-    || signals.length !== p.expectedSignalCount || signals.some(({ latestExpiryDate }) => latestExpiryDate > p.cutoffDate)) {
+    || signals.length !== p.expectedSignalCount || signals.some(({ entryDate, latestExpiryDate }) => entryDate >= latestExpiryDate || latestExpiryDate > p.cutoffDate)) {
     throw new Error('Study calendar differs from the frozen design.');
   }
   return { closeDates, signals };
